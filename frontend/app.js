@@ -12410,6 +12410,317 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+
+  // =========================================================================
+  // MYTEE Cute Robot Companion & Intelligent Roaming Engine
+  // =========================================================================
+  class MyteeRobotCompanion {
+    constructor(launcherEl, onTrigger) {
+      this.launcher = launcherEl;
+      this.onTrigger = onTrigger;
+      this.bubble = document.getElementById('mytee-robot-bubble');
+      this.bubbleText = document.getElementById('mytee-bubble-text');
+      this.eyesWrap = document.getElementById('mytee-eyes-wrap');
+      this.figure = document.getElementById('mytee-robot-figure');
+      this.body = document.getElementById('mytee-robot-body');
+
+      this.currentX = 0;
+      this.currentY = 0;
+      this.isDragging = false;
+      this.hasMoved = false;
+      this.startX = 0;
+      this.startY = 0;
+      this.dragOriginX = 0;
+      this.dragOriginY = 0;
+
+      this.isDrawerOpen = false;
+      this.isHovered = false;
+      this.isRoaming = false;
+      this.roamTimeout = null;
+      this.eyeTimeout = null;
+      this.bubbleTimeout = null;
+
+      this.tips = [
+        "Hi! Need exam help? ✨",
+        "I can analyze repeat PYQs! 🎯",
+        "Ask me about any subject! 📚",
+        "Exam tips ready for you! 💡",
+        "Click me to start chatting! 🤖"
+      ];
+      this.tipIndex = 0;
+
+      this.init();
+    }
+
+    init() {
+      this.bindDragEvents();
+      this.bindHoverEvents();
+      this.startEyeMovements();
+      this.scheduleNextRoam(8000);
+    }
+
+    playChirp() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        if (ctx.state === 'suspended') {
+          ctx.resume();
+        }
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        const now = ctx.currentTime;
+        osc.frequency.setValueAtTime(587.33, now); // D5
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.07); // A5
+        osc.frequency.exponentialRampToValueAtTime(1174.66, now + 0.15); // D6
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.23);
+      } catch (err) {
+        // Silent fail on restricted autoplay policies
+      }
+    }
+
+    bindDragEvents() {
+      if (!this.launcher) return;
+
+      const onPointerDown = (e) => {
+        // Only primary mouse button or touch
+        if (e.button !== undefined && e.button !== 0) return;
+        this.isDragging = true;
+        this.hasMoved = false;
+        this.startX = e.clientX;
+        this.startY = e.clientY;
+        this.dragOriginX = this.currentX;
+        this.dragOriginY = this.currentY;
+
+        this.launcher.classList.remove('mytee-robot-roaming');
+        if (this.launcher.setPointerCapture) {
+          try { this.launcher.setPointerCapture(e.pointerId); } catch (_) {}
+        }
+      };
+
+      const onPointerMove = (e) => {
+        if (!this.isDragging) return;
+        const dx = e.clientX - this.startX;
+        const dy = e.clientY - this.startY;
+
+        if (!this.hasMoved && Math.hypot(dx, dy) > 6) {
+          this.hasMoved = true;
+          this.stopRoaming();
+        }
+
+        if (this.hasMoved) {
+          this.currentX = this.dragOriginX + dx;
+          this.currentY = this.dragOriginY + dy;
+          const tilt = Math.max(-12, Math.min(12, dx * 0.3));
+          this.launcher.style.transform = `translate3d(${this.currentX}px, ${this.currentY}px, 0) rotate(${tilt}deg)`;
+        }
+      };
+
+      const onPointerUp = (e) => {
+        if (!this.isDragging) return;
+        this.isDragging = false;
+        if (this.launcher.releasePointerCapture) {
+          try { this.launcher.releasePointerCapture(e.pointerId); } catch (_) {}
+        }
+
+        if (this.hasMoved) {
+          // Settled after dragging
+          this.launcher.style.transform = `translate3d(${this.currentX}px, ${this.currentY}px, 0) rotate(0deg)`;
+          this.scheduleNextRoam(14000);
+        } else {
+          // It was a crisp click!
+          this.handleClick();
+        }
+      };
+
+      this.launcher.addEventListener('pointerdown', onPointerDown);
+      window.addEventListener('pointermove', onPointerMove, { passive: true });
+      window.addEventListener('pointerup', onPointerUp);
+      window.addEventListener('pointercancel', onPointerUp);
+    }
+
+    handleClick() {
+      this.playChirp();
+      this.launcher.classList.add('is-jumping');
+      setTimeout(() => {
+        if (this.launcher) this.launcher.classList.remove('is-jumping');
+      }, 700);
+
+      if (typeof this.onTrigger === 'function') {
+        this.onTrigger();
+      }
+    }
+
+    bindHoverEvents() {
+      if (!this.launcher) return;
+
+      this.launcher.addEventListener('pointerenter', () => {
+        this.isHovered = true;
+        this.launcher.classList.add('is-happy');
+        this.showBubble("Click me to chat! ✨", 4000);
+        this.stopRoaming();
+      });
+
+      this.launcher.addEventListener('pointerleave', () => {
+        this.isHovered = false;
+        this.launcher.classList.remove('is-happy');
+        if (!this.isDrawerOpen) {
+          this.scheduleNextRoam(10000);
+        }
+      });
+    }
+
+    showBubble(text, duration = 3500) {
+      if (!this.bubble || !this.bubbleText) return;
+      this.bubbleText.textContent = text;
+      this.launcher.classList.add('bubble-visible');
+
+      clearTimeout(this.bubbleTimeout);
+      this.bubbleTimeout = setTimeout(() => {
+        if (this.launcher) this.launcher.classList.remove('bubble-visible');
+      }, duration);
+    }
+
+    startEyeMovements() {
+      const lookSequence = () => {
+        if (!this.isHovered && !this.isDragging && this.eyesWrap && this.body) {
+          const action = Math.random();
+          if (action < 0.4) {
+            // Look left
+            this.eyesWrap.style.transform = 'translateX(-3.5px)';
+            this.body.style.transform = 'rotate(-2.5deg)';
+            setTimeout(() => {
+              if (this.eyesWrap) this.eyesWrap.style.transform = 'translateX(0px)';
+              if (this.body) this.body.style.transform = 'rotate(0deg)';
+            }, 1200);
+          } else if (action < 0.8) {
+            // Look right
+            this.eyesWrap.style.transform = 'translateX(3.5px)';
+            this.body.style.transform = 'rotate(2.5deg)';
+            setTimeout(() => {
+              if (this.eyesWrap) this.eyesWrap.style.transform = 'translateX(0px)';
+              if (this.body) this.body.style.transform = 'rotate(0deg)';
+            }, 1200);
+          }
+        }
+        const nextDelay = 4500 + Math.random() * 4000;
+        this.eyeTimeout = setTimeout(lookSequence, nextDelay);
+      };
+
+      this.eyeTimeout = setTimeout(lookSequence, 4000);
+    }
+
+    scheduleNextRoam(delay = 12000) {
+      this.stopRoaming();
+      if (this.isDrawerOpen || window.innerWidth <= 768) return;
+
+      this.roamTimeout = setTimeout(() => {
+        this.roamStep();
+      }, delay);
+    }
+
+    stopRoaming() {
+      clearTimeout(this.roamTimeout);
+      this.roamTimeout = null;
+    }
+
+    roamStep() {
+      if (this.isDrawerOpen || this.isHovered || this.isDragging || window.innerWidth <= 768) {
+        return;
+      }
+
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+
+      // Safe boundaries for gentle roaming
+      // Home anchor is at bottom: 24px, right: 28px (approx x: w - 100, y: h - 110)
+      const minX = -Math.round(w * 0.45);
+      const maxX = 10;
+      const minY = -Math.round(h * 0.65);
+      const maxY = 10;
+
+      // Decide whether to return closer to home or wander to a new safe spot
+      let targetX = 0;
+      let targetY = 0;
+      if (Math.abs(this.currentX) > 120 || Math.abs(this.currentY) > 150) {
+        // Return towards home
+        targetX = Math.round(minX * Math.random() * 0.4);
+        targetY = Math.round(minY * Math.random() * 0.4);
+      } else {
+        // Explore a new safe spot
+        targetX = Math.round(minX * (0.3 + Math.random() * 0.6));
+        targetY = Math.round(minY * (0.2 + Math.random() * 0.7));
+      }
+
+      const dx = targetX - this.currentX;
+      const tilt = dx < -20 ? -8 : (dx > 20 ? 8 : 0);
+
+      this.launcher.classList.add('mytee-robot-roaming');
+      this.launcher.style.transform = `translate3d(${targetX}px, ${targetY}px, 0) rotate(${tilt}deg)`;
+      this.currentX = targetX;
+      this.currentY = targetY;
+
+      // Eyes look in direction of travel
+      if (this.eyesWrap) {
+        this.eyesWrap.style.transform = tilt < 0 ? 'translateX(-3px)' : 'translateX(3px)';
+      }
+
+      // After glide arrives (3.2s)
+      setTimeout(() => {
+        if (!this.launcher) return;
+        this.launcher.classList.remove('mytee-robot-roaming');
+        this.launcher.style.transform = `translate3d(${this.currentX}px, ${this.currentY}px, 0) rotate(0deg)`;
+
+        // Curious looking around upon arrival
+        if (this.eyesWrap) {
+          this.eyesWrap.style.transform = 'translateX(-3px)';
+          setTimeout(() => {
+            if (this.eyesWrap) this.eyesWrap.style.transform = 'translateX(3px)';
+            setTimeout(() => {
+              if (this.eyesWrap) this.eyesWrap.style.transform = 'translateX(0px)';
+            }, 900);
+          }, 900);
+        }
+
+        // Occasionally show an encouraging tip
+        if (Math.random() < 0.45) {
+          const tip = this.tips[this.tipIndex % this.tips.length];
+          this.tipIndex++;
+          this.showBubble(tip, 3800);
+        }
+
+        // Schedule next gentle wander
+        this.scheduleNextRoam(12000 + Math.random() * 8000);
+      }, 3300);
+    }
+
+    onDrawerOpen() {
+      this.isDrawerOpen = true;
+      this.stopRoaming();
+      // Smoothly dock back near drawer launcher
+      if (this.launcher) {
+        this.launcher.classList.add('mytee-robot-roaming');
+        this.launcher.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
+        this.currentX = 0;
+        this.currentY = 0;
+        setTimeout(() => {
+          if (this.launcher) this.launcher.classList.remove('mytee-robot-roaming');
+        }, 800);
+      }
+    }
+
+    onDrawerClose() {
+      this.isDrawerOpen = false;
+      this.scheduleNextRoam(6000);
+    }
+  }
+
   function toggleMyteeDrawer(forceOpen) {
     const drawer = document.getElementById('mytee-drawer');
     if (!drawer) return;
@@ -12439,8 +12750,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const input = document.getElementById('mytee-input');
       if (input) setTimeout(() => input.focus(), 150);
       scrollMyteeToBottom();
+      if (window.myteeCompanion) window.myteeCompanion.onDrawerOpen();
     } else {
       drawer.classList.add('mytee-hidden');
+      if (window.myteeCompanion) window.myteeCompanion.onDrawerClose();
     }
   }
 
@@ -12843,7 +13156,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const messagesBox = document.getElementById('mytee-messages');
 
     if (launcher) {
-      launcher.addEventListener('click', () => toggleMyteeDrawer());
+      window.myteeCompanion = new MyteeRobotCompanion(launcher, () => toggleMyteeDrawer());
     }
 
     if (closeBtn) {

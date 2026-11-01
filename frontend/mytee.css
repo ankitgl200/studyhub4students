@@ -2,78 +2,341 @@
    MYTEE — StudyMyte's Official Intelligent AI Assistant Styles
    ========================================================================== */
 
-/* Floating Launcher Button */
-.mytee-launcher {
+/* ==========================================================================
+   MYTEE Robot Mascot & Interactive Companion
+   ========================================================================== */
+
+.mytee-launcher,
+.mytee-launcher.mytee-robot-launcher {
   position: fixed !important;
-  bottom: 28px !important;
+  bottom: 24px !important;
   right: 28px !important;
   z-index: 99998 !important;
   display: flex !important;
+  flex-direction: column !important;
   align-items: center !important;
-  gap: 10px !important;
-  padding: 10px 18px 10px 12px !important;
-  border-radius: 999px !important;
-  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #4f46e5 100%) !important;
-  color: #ffffff !important;
-  border: 1.5px solid rgba(255, 255, 255, 0.3) !important;
-  box-shadow: 0 10px 25px -4px rgba(37, 99, 235, 0.5), 0 0 20px rgba(79, 70, 229, 0.35) !important;
-  cursor: pointer !important;
-  font-family: 'Outfit', 'Inter', -apple-system, sans-serif !important;
-  font-weight: 700 !important;
-  font-size: 14px !important;
-  letter-spacing: 0.3px !important;
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  justify-content: flex-end !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  cursor: grab !important;
   user-select: none !important;
-  line-height: 1 !important;
+  outline: none !important;
+  touch-action: none !important;
+  width: auto !important;
+  height: auto !important;
+  line-height: normal !important;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease !important;
+  -webkit-tap-highlight-color: transparent !important;
 }
 
-.mytee-launcher:hover {
-  transform: translateY(-3px) scale(1.04) !important;
-  box-shadow: 0 16px 32px -4px rgba(37, 99, 235, 0.65), 0 0 30px rgba(79, 70, 229, 0.5) !important;
-  border-color: rgba(255, 255, 255, 0.6) !important;
+.mytee-launcher.mytee-robot-launcher:active {
+  cursor: grabbing !important;
 }
 
-.mytee-launcher:active {
-  transform: translateY(0) scale(0.97) !important;
+/* Roaming smooth glide transition */
+.mytee-launcher.mytee-robot-roaming {
+  transition: transform 3.2s cubic-bezier(0.25, 1, 0.5, 1) !important;
 }
 
-.mytee-avatar-orbit {
+/* Robot Figure Container */
+.mytee-robot-figure {
   position: relative !important;
-  width: 32px !important;
-  height: 32px !important;
-  border-radius: 50% !important;
-  background: rgba(255, 255, 255, 0.2) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
+  animation: myteeRobotFloat 3.2s ease-in-out infinite alternate !important;
+  transform-origin: center bottom !important;
+  filter: drop-shadow(0 10px 22px rgba(37, 99, 235, 0.3)) !important;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 
-.mytee-pulse-ring {
+.mytee-robot-launcher:hover .mytee-robot-figure {
+  transform: translateY(-4px) scale(1.06) !important;
+}
+
+.mytee-robot-svg {
+  display: block !important;
+  overflow: visible !important;
+  transition: transform 0.25s ease !important;
+}
+
+/* Floating animation */
+@keyframes myteeRobotFloat {
+  0% {
+    transform: translateY(0px);
+  }
+  100% {
+    transform: translateY(-8px);
+  }
+}
+
+/* Anti-gravity Thruster Pulse */
+.mytee-thruster {
+  animation: myteeThrusterPulse 2s ease-in-out infinite alternate !important;
+  transform-origin: 44px 90px !important;
+}
+
+@keyframes myteeThrusterPulse {
+  0% {
+    opacity: 0.6;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+.mytee-hover-shadow {
+  animation: myteeShadowScale 3.2s ease-in-out infinite alternate !important;
+  transform-origin: 44px 96px !important;
+}
+
+@keyframes myteeShadowScale {
+  0% {
+    opacity: 0.28;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.12;
+    transform: scale(0.75);
+  }
+}
+
+/* Antenna Beacon Glow */
+.mytee-antenna-orb {
+  animation: myteeAntennaGlow 1.8s ease-in-out infinite alternate !important;
+}
+
+@keyframes myteeAntennaGlow {
+  0% {
+    fill: #38bdf8;
+    opacity: 0.75;
+  }
+  100% {
+    fill: #00f0ff;
+    opacity: 1;
+    filter: drop-shadow(0 0 6px #00f0ff);
+  }
+}
+
+/* Eyes Wrap: look left/right and blinking */
+.mytee-eyes-wrap {
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  transform-origin: 44px 39px !important;
+}
+
+.mytee-eye {
+  transform-origin: 50% 50% !important;
+}
+
+.eye-left {
+  transform-origin: 33px 39px !important;
+}
+
+.eye-right {
+  transform-origin: 55px 39px !important;
+}
+
+/* Natural Blinking */
+.mytee-eye .eye-normal,
+.mytee-eye .eye-sparkle {
+  animation: myteeEyeBlink 4.5s infinite !important;
+  transform-origin: center !important;
+  transition: opacity 0.2s ease !important;
+}
+
+@keyframes myteeEyeBlink {
+  0%, 94%, 98%, 100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.08);
+  }
+}
+
+/* Happy Eyes (hidden by default) */
+.eye-happy {
+  opacity: 0 !important;
+  transition: opacity 0.2s ease !important;
+}
+
+/* On hover or excited state: eyes turn into happy arcs ^ ^ */
+.mytee-robot-launcher:hover .eye-normal,
+.mytee-robot-launcher:hover .eye-sparkle,
+.mytee-robot-launcher.is-happy .eye-normal,
+.mytee-robot-launcher.is-happy .eye-sparkle {
+  opacity: 0 !important;
+}
+
+.mytee-robot-launcher:hover .eye-happy,
+.mytee-robot-launcher.is-happy .eye-happy {
+  opacity: 1 !important;
+}
+
+/* Cute Cheeks Blush */
+.mytee-blush {
+  opacity: 0.45 !important;
+  transition: opacity 0.3s ease, transform 0.3s ease !important;
+}
+
+.mytee-robot-launcher:hover .mytee-blush,
+.mytee-robot-launcher.is-happy .mytee-blush {
+  opacity: 0.95 !important;
+  transform: scale(1.25) !important;
+}
+
+/* Floating Arms Waving */
+.mytee-arm-left {
+  animation: myteeArmLeftIdle 3s ease-in-out infinite alternate !important;
+  transform-origin: 13px 56px !important;
+}
+
+.mytee-arm-right {
+  animation: myteeArmRightIdle 3s ease-in-out infinite alternate !important;
+  transform-origin: 75px 56px !important;
+}
+
+@keyframes myteeArmLeftIdle {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-6deg); }
+}
+
+@keyframes myteeArmRightIdle {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(6deg); }
+}
+
+.mytee-robot-launcher:hover .mytee-arm-left {
+  animation: myteeArmWave 0.6s ease-in-out infinite alternate !important;
+}
+
+@keyframes myteeArmWave {
+  0% { transform: rotate(-15deg); }
+  100% { transform: rotate(10deg); }
+}
+
+/* Core LED */
+.core-led {
+  animation: myteeCorePulse 1.6s ease-in-out infinite alternate !important;
+}
+
+@keyframes myteeCorePulse {
+  0% { fill: #2563eb; opacity: 0.6; }
+  100% { fill: #38bdf8; opacity: 1; filter: drop-shadow(0 0 5px #38bdf8); }
+}
+
+/* Speech Tooltip Bubble */
+.mytee-robot-bubble {
   position: absolute !important;
-  top: -3px !important;
-  left: -3px !important;
-  right: -3px !important;
-  bottom: -3px !important;
-  border-radius: 50% !important;
-  border: 2px solid rgba(255, 255, 255, 0.7) !important;
-  animation: myteePulse 2.4s infinite cubic-bezier(0.4, 0, 0.6, 1) !important;
+  top: -36px !important;
+  left: 50% !important;
+  transform: translateX(-50%) translateY(4px) scale(0.9) !important;
+  background: rgba(15, 23, 42, 0.94) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(56, 189, 248, 0.45) !important;
+  border-radius: 999px !important;
+  padding: 5px 12px !important;
+  color: #ffffff !important;
+  font-family: 'Outfit', 'Inter', -apple-system, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.2px !important;
+  white-space: nowrap !important;
+  box-shadow: 0 8px 24px -4px rgba(14, 165, 233, 0.4), 0 0 12px rgba(56, 189, 248, 0.25) !important;
+  opacity: 0 !important;
   pointer-events: none !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  z-index: 99999 !important;
 }
 
-@keyframes myteePulse {
-  0% { transform: scale(0.95); opacity: 0.9; }
-  50% { transform: scale(1.35); opacity: 0; }
-  100% { transform: scale(0.95); opacity: 0; }
+.mytee-robot-bubble .bubble-arrow {
+  position: absolute !important;
+  bottom: -5px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: 0 !important;
+  height: 0 !important;
+  border-left: 5px solid transparent !important;
+  border-right: 5px solid transparent !important;
+  border-top: 5px solid rgba(15, 23, 42, 0.94) !important;
 }
 
-.mytee-badge-ai {
-  font-size: 10px !important;
-  padding: 2px 7px !important;
-  background: rgba(255, 255, 255, 0.25) !important;
-  border-radius: 12px !important;
-  text-transform: uppercase !important;
+/* Bubble visible state */
+.mytee-robot-launcher:hover .mytee-robot-bubble,
+.mytee-robot-launcher.bubble-visible .mytee-robot-bubble {
+  opacity: 1 !important;
+  transform: translateX(-50%) translateY(0px) scale(1) !important;
+}
+
+/* Floating Name Badge */
+.mytee-robot-badge {
+  margin-top: 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 3px 10px 3px 7px !important;
+  background: rgba(15, 23, 42, 0.88) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(59, 130, 246, 0.4) !important;
+  border-radius: 999px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  color: #ffffff !important;
+  font-family: 'Outfit', 'Inter', -apple-system, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.4px !important;
+  transition: all 0.25s ease !important;
+}
+
+.mytee-robot-launcher:hover .mytee-robot-badge {
+  border-color: rgba(56, 189, 248, 0.7) !important;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4) !important;
+}
+
+.badge-status-dot {
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: #10b981 !important;
+  box-shadow: 0 0 8px #10b981 !important;
+  animation: myteeStatusDotPulse 2s infinite !important;
+}
+
+@keyframes myteeStatusDotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+.badge-ai-pill {
+  font-size: 8.5px !important;
   font-weight: 800 !important;
+  padding: 1px 5px !important;
+  border-radius: 6px !important;
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%) !important;
+  color: #ffffff !important;
   letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+}
+
+/* Joyful Click Jump Animation */
+.mytee-robot-launcher.is-jumping .mytee-robot-figure {
+  animation: myteeRobotJump 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+}
+
+@keyframes myteeRobotJump {
+  0% { transform: scale(1) translateY(0); }
+  35% { transform: scale(1.18) translateY(-22px) rotate(-6deg); }
+  65% { transform: scale(1.05) translateY(-8px) rotate(4deg); }
+  100% { transform: scale(1) translateY(0) rotate(0deg); }
 }
 
 /* Chat Drawer / Floating Window */
@@ -958,11 +1221,19 @@
 
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
-  .mytee-launcher {
-    bottom: 96px !important;
-    right: 18px !important;
-    padding: 8px 14px 8px 10px !important;
-    font-size: 13px !important;
+  .mytee-launcher,
+  .mytee-launcher.mytee-robot-launcher {
+    bottom: 84px !important;
+    right: 16px !important;
+    padding: 0 !important;
+  }
+  .mytee-launcher.mytee-robot-launcher .mytee-robot-svg {
+    width: 64px !important;
+    height: 72px !important;
+  }
+  .mytee-robot-bubble {
+    font-size: 10px !important;
+    padding: 4px 9px !important;
   }
 
   .mytee-drawer {
