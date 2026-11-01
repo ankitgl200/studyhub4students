@@ -12818,9 +12818,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (input) setTimeout(() => input.focus(), 150);
       scrollMyteeToBottom();
       if (window.myteeCompanion) window.myteeCompanion.onDrawerOpen();
+      if (window.mytee) window.mytee.setState('greeting');
     } else {
       drawer.classList.add('mytee-hidden');
       if (window.myteeCompanion) window.myteeCompanion.onDrawerClose();
+      if (window.mytee) window.mytee.setState('idle');
     }
   }
 
@@ -13075,6 +13077,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sendBtn) sendBtn.disabled = true;
 
     renderTypingIndicator();
+    if (window.mytee) window.mytee.setState('thinking');
 
     try {
       const response = await fetch(`${API_BASE}/mytee/chat`, {
@@ -13144,8 +13147,16 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       appendModelMessage(resData);
+      if (window.mytee) {
+        window.mytee.setState('speaking');
+        setTimeout(() => { if (window.mytee) window.mytee.setState('idle'); }, 4500);
+      }
 
     } catch (err) {
+      if (window.mytee) {
+        window.mytee.setState('error');
+        setTimeout(() => { if (window.mytee) window.mytee.setState('idle'); }, 3500);
+      }
       removeTypingIndicator();
       console.error('[MYTEE Client] Error:', err);
       appendModelMessage({
