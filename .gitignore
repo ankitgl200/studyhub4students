@@ -10,6 +10,12 @@ package-lock.json
 serviceAccountKey.json
 backend/serviceAccountKey.json
 */serviceAccountKey.json
+*.pem
+*.key
+*.cert
+*.pfx
+*.p12
+.ewv*
 
 # Build outputs & temporary files
 dist/
