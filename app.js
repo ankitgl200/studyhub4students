@@ -12436,9 +12436,14 @@ document.addEventListener('DOMContentLoaded', () => {
       this.isDrawerOpen = false;
       this.isHovered = false;
       this.isRoaming = false;
-      this.roamTimeout = null;
+      this.inactivityTimeout = null;
+      this.roamStepTimeout = null;
       this.eyeTimeout = null;
       this.bubbleTimeout = null;
+      this.lastActivityTime = Date.now();
+
+      // Screen left untouched for 1 minute (60,000 ms) before roaming starts
+      this.INACTIVITY_DELAY = 60000;
 
       this.tips = [
         "Hi! Need exam help? ✨",
@@ -12455,8 +12460,9 @@ document.addEventListener('DOMContentLoaded', () => {
     init() {
       this.bindDragEvents();
       this.bindHoverEvents();
+      this.bindUserActivityWatchers();
       this.startEyeMovements();
-      this.scheduleNextRoam(8000);
+      this.resetInactivityTimer();
     }
 
     playChirp() {
@@ -12485,11 +12491,95 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+    bindUserActivityWatchers() {
+      const handleUserActivity = () => {
+        if (this.isDragging) return;
+
+        const now = Date.now();
+        // If robot is currently roaming or away from home, user touching screen immediately summons it home!
+        if (this.isRoaming || this.currentX !== 0 || this.currentY !== 0) {
+          this.returnToHome();
+        }
+
+        // Throttle timer resets
+        if (now - this.lastActivityTime > 400) {
+          this.lastActivityTime = now;
+          this.resetInactivityTimer();
+        }
+      };
+
+      const activityEvents = ['pointerdown', 'touchstart', 'touchmove', 'scroll', 'keydown', 'wheel'];
+      activityEvents.forEach((evt) => {
+        window.addEventListener(evt, handleUserActivity, { passive: true });
+      });
+
+      let moveThrottle = 0;
+      window.addEventListener('pointermove', () => {
+        if (this.isDragging) return;
+        const now = Date.now();
+        if (this.isRoaming || this.currentX !== 0 || this.currentY !== 0) {
+          this.returnToHome();
+        }
+        if (now - moveThrottle > 500) {
+          moveThrottle = now;
+          this.resetInactivityTimer();
+        }
+      }, { passive: true });
+    }
+
+    resetInactivityTimer() {
+      clearTimeout(this.inactivityTimeout);
+      this.inactivityTimeout = null;
+
+      if (this.isDrawerOpen) return;
+
+      // Start roaming only after 1 full minute of untouched screen
+      this.inactivityTimeout = setTimeout(() => {
+        this.startRoamingSession();
+      }, this.INACTIVITY_DELAY);
+    }
+
+    startRoamingSession() {
+      if (this.isDrawerOpen || this.isHovered || this.isDragging) return;
+      this.isRoaming = true;
+      this.roamStep();
+    }
+
+    returnToHome() {
+      this.stopRoaming();
+      this.isRoaming = false;
+      if (!this.launcher) return;
+
+      if (this.currentX !== 0 || this.currentY !== 0) {
+        this.launcher.classList.add('mytee-robot-roaming');
+        const dx = -this.currentX;
+        const tilt = dx < -15 ? -6 : (dx > 15 ? 6 : 0);
+        this.launcher.style.transform = `translate3d(0, 0, 0) rotate(${tilt}deg)`;
+        this.currentX = 0;
+        this.currentY = 0;
+
+        setTimeout(() => {
+          if (this.launcher) {
+            this.launcher.classList.remove('mytee-robot-roaming');
+            this.launcher.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
+          }
+          if (this.eyesWrap) {
+            this.eyesWrap.style.transform = 'translateX(0px)';
+          }
+        }, 1200);
+      }
+    }
+
+    stopRoaming() {
+      this.isRoaming = false;
+      clearTimeout(this.roamStepTimeout);
+      this.roamStepTimeout = null;
+    }
+
     bindDragEvents() {
       if (!this.launcher) return;
 
       const onPointerDown = (e) => {
-        // Only primary mouse button or touch
         if (e.button !== undefined && e.button !== 0) return;
         this.isDragging = true;
         this.hasMoved = false;
@@ -12530,11 +12620,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (this.hasMoved) {
-          // Settled after dragging
           this.launcher.style.transform = `translate3d(${this.currentX}px, ${this.currentY}px, 0) rotate(0deg)`;
-          this.scheduleNextRoam(14000);
+          this.resetInactivityTimer();
         } else {
-          // It was a crisp click!
           this.handleClick();
         }
       };
@@ -12552,6 +12640,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (this.launcher) this.launcher.classList.remove('is-jumping');
       }, 700);
 
+      if (this.isRoaming || this.currentX !== 0 || this.currentY !== 0) {
+        this.returnToHome();
+      }
+
       if (typeof this.onTrigger === 'function') {
         this.onTrigger();
       }
@@ -12564,14 +12656,16 @@ document.addEventListener('DOMContentLoaded', () => {
         this.isHovered = true;
         this.launcher.classList.add('is-happy');
         this.showBubble("Click me to chat! ✨", 4000);
-        this.stopRoaming();
+        if (this.isRoaming) {
+          this.returnToHome();
+        }
       });
 
       this.launcher.addEventListener('pointerleave', () => {
         this.isHovered = false;
         this.launcher.classList.remove('is-happy');
         if (!this.isDrawerOpen) {
-          this.scheduleNextRoam(10000);
+          this.resetInactivityTimer();
         }
       });
     }
@@ -12616,46 +12710,29 @@ document.addEventListener('DOMContentLoaded', () => {
       this.eyeTimeout = setTimeout(lookSequence, 4000);
     }
 
-    scheduleNextRoam(delay = 12000) {
-      this.stopRoaming();
-      if (this.isDrawerOpen || window.innerWidth <= 768) return;
-
-      this.roamTimeout = setTimeout(() => {
-        this.roamStep();
-      }, delay);
-    }
-
-    stopRoaming() {
-      clearTimeout(this.roamTimeout);
-      this.roamTimeout = null;
-    }
-
     roamStep() {
-      if (this.isDrawerOpen || this.isHovered || this.isDragging || window.innerWidth <= 768) {
+      if (!this.isRoaming || this.isDrawerOpen || this.isHovered || this.isDragging) {
         return;
       }
 
       const w = window.innerWidth;
       const h = window.innerHeight;
 
-      // Safe boundaries for gentle roaming
-      // Home anchor is at bottom: 24px, right: 28px (approx x: w - 100, y: h - 110)
-      const minX = -Math.round(w * 0.45);
+      // Safe bounds across screen
+      const minX = -Math.round(w * 0.55);
       const maxX = 10;
-      const minY = -Math.round(h * 0.65);
+      const minY = -Math.round(h * 0.70);
       const maxY = 10;
 
-      // Decide whether to return closer to home or wander to a new safe spot
       let targetX = 0;
       let targetY = 0;
-      if (Math.abs(this.currentX) > 120 || Math.abs(this.currentY) > 150) {
-        // Return towards home
-        targetX = Math.round(minX * Math.random() * 0.4);
-        targetY = Math.round(minY * Math.random() * 0.4);
+
+      if (Math.abs(this.currentX) > 160 || Math.abs(this.currentY) > 180) {
+        targetX = Math.round(minX * (0.15 + Math.random() * 0.35));
+        targetY = Math.round(minY * (0.15 + Math.random() * 0.4));
       } else {
-        // Explore a new safe spot
-        targetX = Math.round(minX * (0.3 + Math.random() * 0.6));
-        targetY = Math.round(minY * (0.2 + Math.random() * 0.7));
+        targetX = Math.round(minX * (0.35 + Math.random() * 0.6));
+        targetY = Math.round(minY * (0.25 + Math.random() * 0.65));
       }
 
       const dx = targetX - this.currentX;
@@ -12666,62 +12743,52 @@ document.addEventListener('DOMContentLoaded', () => {
       this.currentX = targetX;
       this.currentY = targetY;
 
-      // Eyes look in direction of travel
       if (this.eyesWrap) {
         this.eyesWrap.style.transform = tilt < 0 ? 'translateX(-3px)' : 'translateX(3px)';
       }
 
-      // After glide arrives (3.2s)
-      setTimeout(() => {
-        if (!this.launcher) return;
+      this.roamStepTimeout = setTimeout(() => {
+        if (!this.isRoaming || !this.launcher) return;
         this.launcher.classList.remove('mytee-robot-roaming');
         this.launcher.style.transform = `translate3d(${this.currentX}px, ${this.currentY}px, 0) rotate(0deg)`;
 
-        // Curious looking around upon arrival
         if (this.eyesWrap) {
-          this.eyesWrap.style.transform = 'translateX(-3px)';
+          this.eyesWrap.style.transform = 'translateX(-3.5px)';
           setTimeout(() => {
-            if (this.eyesWrap) this.eyesWrap.style.transform = 'translateX(3px)';
+            if (!this.isRoaming || !this.eyesWrap) return;
+            this.eyesWrap.style.transform = 'translateX(3.5px)';
             setTimeout(() => {
               if (this.eyesWrap) this.eyesWrap.style.transform = 'translateX(0px)';
             }, 900);
           }, 900);
         }
 
-        // Occasionally show an encouraging tip
-        if (Math.random() < 0.45) {
+        if (Math.random() < 0.5) {
           const tip = this.tips[this.tipIndex % this.tips.length];
           this.tipIndex++;
           this.showBubble(tip, 3800);
         }
 
-        // Schedule next gentle wander
-        this.scheduleNextRoam(12000 + Math.random() * 8000);
+        // Schedule next wander step while still untouched
+        this.roamStepTimeout = setTimeout(() => {
+          this.roamStep();
+        }, 10000 + Math.random() * 6000);
       }, 3300);
     }
 
     onDrawerOpen() {
       this.isDrawerOpen = true;
-      this.stopRoaming();
-      // Smoothly dock back near drawer launcher
-      if (this.launcher) {
-        this.launcher.classList.add('mytee-robot-roaming');
-        this.launcher.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
-        this.currentX = 0;
-        this.currentY = 0;
-        setTimeout(() => {
-          if (this.launcher) this.launcher.classList.remove('mytee-robot-roaming');
-        }, 800);
-      }
+      this.returnToHome();
+      clearTimeout(this.inactivityTimeout);
     }
 
     onDrawerClose() {
       this.isDrawerOpen = false;
-      this.scheduleNextRoam(6000);
+      this.resetInactivityTimer();
     }
   }
 
-  function toggleMyteeDrawer(forceOpen) {
+    function toggleMyteeDrawer(forceOpen) {
     const drawer = document.getElementById('mytee-drawer');
     if (!drawer) return;
 
