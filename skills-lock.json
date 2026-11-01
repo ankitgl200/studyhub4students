@@ -1,0 +1,131 @@
+{
+  "version": 1,
+  "skills": {
+    "add-ui": {
+      "source": "aladicf/better-web-ui",
+      "sourceType": "github",
+      "skillPath": "skills/add-ui/SKILL.md",
+      "computedHash": "55c60e7ac983b151d241f12b299080a81a70b5c0e895462a72262c66d7c52a2c"
+    },
+    "agent-security": {
+      "source": "UnitOneAI/SecuritySkills",
+      "sourceType": "github",
+      "skillPath": "skills/ai-security/agent-security/SKILL.md",
+      "computedHash": "0214fa2ebd428ebb7e5b3182cb3052a997a2897d08cfd7ef65b4b772e096d19d"
+    },
+    "agent-security-audit": {
+      "source": "OWASP/secure-agent-playbook",
+      "sourceType": "github",
+      "skillPath": "plugins/ai-security-skills/skills/agent-security-audit/SKILL.md",
+      "computedHash": "c465ace3d25f583d17b6f25eec496d50603d88c1be1313bfc6bd8ad125ad7cd9"
+    },
+    "api-security": {
+      "source": "UnitOneAI/SecuritySkills",
+      "sourceType": "github",
+      "skillPath": "skills/appsec/api-security/SKILL.md",
+      "computedHash": "c42875f190cd0c700bca33db7d78b56fee6fa348dd8b9db88f4659fbd445ef02"
+    },
+    "audit": {
+      "source": "aladicf/better-web-ui",
+      "sourceType": "github",
+      "skillPath": "skills/audit/SKILL.md",
+      "computedHash": "6875ef913334513332ee311a7f30898b4fd161fa89dff65776a632e52300c18e"
+    },
+    "critique": {
+      "source": "aladicf/better-web-ui",
+      "sourceType": "github",
+      "skillPath": "skills/critique/SKILL.md",
+      "computedHash": "328d3ddd8610003062946ed08c29ffd95b3f3cefc52c92993235112a8b1b8bff"
+    },
+    "dependency-scanning": {
+      "source": "UnitOneAI/SecuritySkills",
+      "sourceType": "github",
+      "skillPath": "skills/appsec/dependency-scanning/SKILL.md",
+      "computedHash": "ff7e8b5697409ffa26e32b501447ffb6f2b0142b2563e9c12d9ce5ee539c57fe"
+    },
+    "empty-state": {
+      "source": "aladicf/better-web-ui",
+      "sourceType": "github",
+      "skillPath": "skills/empty-state/SKILL.md",
+      "computedHash": "90a8a8c06bcaa0457391070d70d9f53e6863ddd6942a2cc5d1350a5dea913724"
+    },
+    "forms": {
+      "source": "aladicf/better-web-ui",
+      "sourceType": "github",
+      "skillPath": "skills/forms/SKILL.md",
+      "computedHash": "60be7e76a2ea4acf089caf1465274e6bb10b041068407a0f19e7816994bcbe99"
+    },
+    "frontend-design": {
+      "source": "aladicf/better-web-ui",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "c2cf87cdd07523f4b92d9bbc0b6f90dde57ac574f47a140ca477df4c47a639a9"
+    },
+    "mcp-server-review": {
+      "source": "OWASP/secure-agent-playbook",
+      "sourceType": "github",
+      "skillPath": "plugins/ai-security-skills/skills/mcp-server-review/SKILL.md",
+      "computedHash": "6b54fe771d2ab6b8f603d8da9f5d7f61c38911e6f147d3a158d84fdcd663bfa3"
+    },
+    "mobile-code-review": {
+      "source": "OWASP/secure-agent-playbook",
+      "sourceType": "github",
+      "skillPath": "plugins/code-security-skills/skills/mobile-code-review/SKILL.md",
+      "computedHash": "af4870bf9ca85c657bf7b45a6bbeaa9e3515a54af5f05054928714f147a38968"
+    },
+    "multi-agentic-threat-model": {
+      "source": "OWASP/secure-agent-playbook",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/multi-agentic-threat-model/SKILL.md",
+      "computedHash": "f93b4aec28e678ccd7e7633c9e81bb4d20b82d2fca480260fff39cf205a58716"
+    },
+    "owasp-top-10-web": {
+      "source": "UnitOneAI/SecuritySkills",
+      "sourceType": "github",
+      "skillPath": "skills/appsec/owasp-top-10-web/SKILL.md",
+      "computedHash": "dd4daffd73131d76699541fe3239c10b254722688b06cdbdcba6220fd1cde7b1"
+    },
+    "polish": {
+      "source": "aladicf/better-web-ui",
+      "sourceType": "github",
+      "skillPath": "skills/polish/SKILL.md",
+      "computedHash": "220c204cb6e665641472db5b4a9e7d9382a6d561a76bb2d95a14850cc5206efb"
+    },
+    "prompt-injection": {
+      "source": "UnitOneAI/SecuritySkills",
+      "sourceType": "github",
+      "skillPath": "skills/ai-security/prompt-injection/SKILL.md",
+      "computedHash": "631751e6c02a7fceace570af27b0fac7ea8a21828aa3c794674109f1f6d7f7bc"
+    },
+    "secure-code-review": {
+      "source": "UnitOneAI/SecuritySkills",
+      "sourceType": "github",
+      "skillPath": "skills/appsec/secure-code-review/SKILL.md",
+      "computedHash": "919f1941e9edcd0ce0f5fd5dfe39dce16290d399618defa19f3301665df12b61"
+    },
+    "security-audit": {
+      "source": "cloudflare/security-audit-skill",
+      "sourceType": "github",
+      "skillPath": "skills/security-audit/SKILL.md",
+      "computedHash": "e6b2e317de75da97e9de18d842982994803f3a67a4a6d8154a82323dc3de8528"
+    },
+    "threat-modeling": {
+      "source": "UnitOneAI/SecuritySkills",
+      "sourceType": "github",
+      "skillPath": "skills/appsec/threat-modeling/SKILL.md",
+      "computedHash": "de023ae37c6f953c1313bb50cf72399184aa0d7d298a2d485a62e1c79a8a02eb"
+    },
+    "typeset": {
+      "source": "aladicf/better-web-ui",
+      "sourceType": "github",
+      "skillPath": "skills/typeset/SKILL.md",
+      "computedHash": "f912e8fafc0e68bd5b8838dccd0c03033ce10f2003435a480647b98adb53f30c"
+    },
+    "vibe-ui-designer": {
+      "source": "VelorioLabs/AgentUI-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/vibe-ui-designer/SKILL.md",
+      "computedHash": "0e5532f6438aecddad57de92208835648ecff0ccf4b74245ab3e105303f4536e"
+    }
+  }
+}

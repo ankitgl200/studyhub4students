@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment variables & secrets (CRITICAL: Never commit to GitHub)
+.env
+*.env
+.env.*
+!.env.example
+serviceAccountKey.json
+backend/serviceAccountKey.json
+*/serviceAccountKey.json
+
+# Build outputs & temporary files
+dist/
+build/
+temp/
+backend/temp/
+backend/uploads/*
+!backend/uploads/.gitkeep
+*.log
+
+# OS metadata
+.DS_Store
+Thumbs.db
