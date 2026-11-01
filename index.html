@@ -103,7 +103,7 @@
     gtag('config', 'G-MLBCW8QCG1');
   </script>
   <link id="theme-stylesheet" rel="stylesheet" href="/style.css?v=1.3.4">
-  <link rel="stylesheet" href="/mytee.css?v=1.3.8">
+  <link rel="stylesheet" href="/mytee.css?v=1.3.9">
   <style>
     /* Critical fallback to prevent flash of unstyled content */
     #mytee-drawer.mytee-hidden { display: none !important; }
@@ -4160,13 +4160,118 @@
   <!-- ========================================== -->
   <!-- MYTEE: StudyMyte's Intelligent AI Assistant -->
   <!-- ========================================== -->
-  <button id="mytee-launcher" class="mytee-launcher" aria-label="Open MYTEE AI Assistant" title="Ask MYTEE — Intelligent Assistant">
-    <div class="mytee-avatar-orbit">
-      <span class="mytee-pulse-ring"></span>
-      <i data-lucide="sparkles" style="width: 18px; height: 18px;"></i>
+  <!-- Interactive Floating Robot Mascot -->
+  <button id="mytee-launcher" class="mytee-launcher mytee-robot-launcher" aria-label="Open MYTEE AI Assistant" title="Click or drag MYTEE — Intelligent Study Assistant">
+    <!-- Interactive Speech Bubble -->
+    <div class="mytee-robot-bubble" id="mytee-robot-bubble" aria-live="polite">
+      <span class="bubble-icon">✨</span>
+      <span class="bubble-text" id="mytee-bubble-text">Hi! Need exam help?</span>
+      <span class="bubble-arrow"></span>
     </div>
-    <span>MYTEE</span>
-    <span class="mytee-badge-ai">AI</span>
+
+    <!-- Cute Animated Robot Mascot -->
+    <div class="mytee-robot-figure" id="mytee-robot-figure">
+      <svg class="mytee-robot-svg" viewBox="0 0 88 100" width="76" height="86" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="mytee-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="3.5" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+          <filter id="mytee-shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="rgba(15,23,42,0.3)"/>
+          </filter>
+          <linearGradient id="myteeBodyGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="65%" stop-color="#f8fafc"/>
+            <stop offset="100%" stop-color="#e2e8f0"/>
+          </linearGradient>
+          <linearGradient id="myteeAccentGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#38bdf8"/>
+            <stop offset="50%" stop-color="#2563eb"/>
+            <stop offset="100%" stop-color="#4f46e5"/>
+          </linearGradient>
+          <linearGradient id="myteeVisorGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#090d16"/>
+            <stop offset="60%" stop-color="#0f172a"/>
+            <stop offset="100%" stop-color="#1e293b"/>
+          </linearGradient>
+        </defs>
+
+        <!-- Hover Thruster Rings / Anti-gravity Glow -->
+        <g class="mytee-thruster" id="mytee-thruster">
+          <ellipse cx="44" cy="90" rx="20" ry="4.5" fill="#38bdf8" opacity="0.35" filter="url(#mytee-glow)"/>
+          <ellipse cx="44" cy="90" rx="13" ry="3" fill="#60a5fa" opacity="0.7"/>
+          <ellipse cx="44" cy="91" rx="6" ry="1.6" fill="#ffffff" opacity="0.95"/>
+        </g>
+
+        <!-- Floating Shadow -->
+        <ellipse class="mytee-hover-shadow" cx="44" cy="96" rx="22" ry="3" fill="#020617" opacity="0.25"/>
+
+        <!-- Main Robot Body Group (handles idle floating & tilts) -->
+        <g class="mytee-robot-body" id="mytee-robot-body" filter="url(#mytee-shadow)">
+          <!-- Antenna -->
+          <g class="mytee-antenna">
+            <line x1="44" y1="21" x2="44" y2="9" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+            <circle class="mytee-antenna-orb" cx="44" cy="7" r="4.5" fill="#38bdf8" filter="url(#mytee-glow)"/>
+            <circle cx="44" cy="7" r="2" fill="#ffffff"/>
+          </g>
+
+          <!-- Audio Pod Ears -->
+          <g class="mytee-ears">
+            <rect x="11" y="33" width="7" height="18" rx="3.5" fill="url(#myteeAccentGrad)"/>
+            <circle cx="14.5" cy="42" r="2.2" fill="#38bdf8" filter="url(#mytee-glow)"/>
+            <rect x="70" y="33" width="7" height="18" rx="3.5" fill="url(#myteeAccentGrad)"/>
+            <circle cx="73.5" cy="42" r="2.2" fill="#38bdf8" filter="url(#mytee-glow)"/>
+          </g>
+
+          <!-- Floating Arms -->
+          <g class="mytee-arms">
+            <rect class="mytee-arm mytee-arm-left" x="9" y="55" width="8" height="15" rx="4" fill="url(#myteeBodyGrad)" stroke="#cbd5e1" stroke-width="1.2"/>
+            <rect class="mytee-arm mytee-arm-right" x="71" y="55" width="8" height="15" rx="4" fill="url(#myteeBodyGrad)" stroke="#cbd5e1" stroke-width="1.2"/>
+          </g>
+
+          <!-- Main Chassis -->
+          <rect class="mytee-chassis" x="16" y="18" width="56" height="62" rx="28" fill="url(#myteeBodyGrad)" stroke="#cbd5e1" stroke-width="1.3"/>
+
+          <!-- Visor Screen -->
+          <rect class="mytee-visor" x="22" y="24" width="44" height="32" rx="16" fill="url(#myteeVisorGrad)" stroke="#1e293b" stroke-width="1.2"/>
+          <path d="M 28 29 Q 44 26 60 29" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" stroke-linecap="round"/>
+
+          <!-- Blush Cheeks -->
+          <ellipse class="mytee-blush blush-left" cx="28" cy="48" rx="3.8" ry="2" fill="#f472b6" opacity="0.6"/>
+          <ellipse class="mytee-blush blush-right" cx="60" cy="48" rx="3.8" ry="2" fill="#f472b6" opacity="0.6"/>
+
+          <!-- Eyes Group -->
+          <g class="mytee-eyes-wrap" id="mytee-eyes-wrap">
+            <g class="mytee-eye eye-left">
+              <rect class="eye-normal" x="29" y="33" width="8" height="12" rx="4" fill="#38bdf8" filter="url(#mytee-glow)"/>
+              <circle class="eye-sparkle" cx="31.5" cy="35.5" r="1.5" fill="#ffffff"/>
+              <path class="eye-happy" d="M 28 41 Q 33 33 38 41" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" fill="none"/>
+            </g>
+            <g class="mytee-eye eye-right">
+              <rect class="eye-normal" x="51" y="33" width="8" height="12" rx="4" fill="#38bdf8" filter="url(#mytee-glow)"/>
+              <circle class="eye-sparkle" cx="53.5" cy="35.5" r="1.5" fill="#ffffff"/>
+              <path class="eye-happy" d="M 50 41 Q 55 33 60 41" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" fill="none"/>
+            </g>
+          </g>
+
+          <!-- Chest Core -->
+          <g class="mytee-chest-core">
+            <rect x="28" y="65" width="32" height="10" rx="5" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+            <circle class="core-led" cx="44" cy="70" r="2.5" fill="#38bdf8" filter="url(#mytee-glow)"/>
+            <line x1="33" y1="70" x2="37" y2="70" stroke="#38bdf8" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/>
+            <line x1="51" y1="70" x2="55" y2="70" stroke="#38bdf8" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/>
+          </g>
+        </g>
+      </svg>
+    </div>
+
+    <!-- Cute Floating Badge -->
+    <div class="mytee-robot-badge">
+      <span class="badge-status-dot"></span>
+      <span class="badge-title">MYTEE</span>
+      <span class="badge-ai-pill">AI</span>
+    </div>
   </button>
 
   <div id="mytee-drawer" class="mytee-drawer mytee-hidden" role="dialog" aria-label="MYTEE Chat Window">
@@ -4247,7 +4352,7 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
 
-  <script src="/app.js?v=1.3.8"></script>
+  <script src="/app.js?v=1.3.9"></script>
 
 
 
