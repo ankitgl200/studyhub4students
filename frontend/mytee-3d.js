@@ -1007,6 +1007,11 @@
       canvas.style.height = '90px';
       canvas.style.display = 'block';
       canvas.style.cursor = 'grab';
+      canvas.addEventListener('click', (e) => {
+        if (typeof window.toggleMyteeDrawer === 'function') {
+          window.toggleMyteeDrawer();
+        }
+      });
       container.appendChild(canvas);
       this.floatCanvas = canvas;
 
@@ -1053,9 +1058,10 @@
       const launcher = document.getElementById('mytee-launcher');
       if (!launcher || document.getElementById('mytee-btn-inspect-3d')) return;
 
-      const btn = document.createElement('button');
+      const btn = document.createElement('div');
       btn.id = 'mytee-btn-inspect-3d';
-      btn.type = 'button';
+      btn.setAttribute('role', 'button');
+      btn.setAttribute('tabindex', '0');
       btn.title = 'Open 3D Character Inspector & Mascot Studio';
       btn.className = 'mytee-inspect-pill';
       btn.innerHTML = '<span>3D View</span>';
@@ -1328,3 +1334,4 @@
   });
 
 })(window, document);
+
