@@ -1,0 +1,12898 @@
+// --- DYNAMIC SCRIPT LOADERS (Performance Optimization) ---
+function refreshIcons() {
+  if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    window.lucide.createIcons();
+  }
+}
+
+function loadScript(url) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${url}"]`)) {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = url;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = (err) => reject(err);
+    document.head.appendChild(script);
+  });
+}
+
+function ensureJsPDFLoaded() {
+  if (window.jspdf) return Promise.resolve();
+  return loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+}
+
+
+
+
+
+
+// --- SKELETON LOADING TEMPLATE GENERATORS ---
+function getLeaderboardSkeleton() {
+  return `
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      ${[1, 2, 3].map(() => `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--white); font-size: 13px;">
+          <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+            <div class="skeleton" style="width: 24px; height: 16px; border-radius: 4px;"></div>
+            <div class="skeleton" style="width: 110px; height: 16px; border-radius: 4px;"></div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function getAnnouncementsSkeleton() {
+  return `
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+      ${[1, 2].map(() => `
+        <div class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+          <div class="skeleton" style="width: 45%; height: 20px; border-radius: 4px;"></div>
+          <div class="skeleton" style="width: 25%; height: 12px; border-radius: 4px;"></div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div class="skeleton" style="width: 95%; height: 14px; border-radius: 4px;"></div>
+            <div class="skeleton" style="width: 75%; height: 14px; border-radius: 4px;"></div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function getGridSkeleton(count = 4) {
+  return `
+    <div class="folder-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; width: 100%;">
+      ${Array.from({ length: count }).map(() => `
+        <div class="card" style="padding: 16px; display: flex; align-items: center; gap: 12px; border: 1px solid var(--border-color); background: var(--white);">
+          <div class="skeleton" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+          <div class="skeleton" style="flex: 1; height: 16px; border-radius: 4px;"></div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function getListSkeleton(count = 3) {
+  return `
+    <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
+      ${Array.from({ length: count }).map(() => `
+        <div class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--border-color); background: var(--white);">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+            <div class="skeleton" style="width: 60%; height: 18px; border-radius: 4px;"></div>
+            <div class="skeleton" style="width: 15%; height: 14px; border-radius: 4px;"></div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <div class="skeleton" style="width: 30%; height: 14px; border-radius: 4px;"></div>
+            <div class="skeleton" style="width: 20%; height: 14px; border-radius: 4px;"></div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// --- API SERVICE ---
+const isLocalhost = window.location.hostname === 'localhost' || 
+                    window.location.hostname === '127.0.0.1' || 
+                    window.location.hostname.startsWith('192.168.') || 
+                    window.location.hostname.startsWith('10.') || 
+                    window.location.hostname.startsWith('172.') ||
+                    window.location.protocol === 'file:';
+const API_BASE = isLocalhost
+  ? (window.location.protocol === 'file:' 
+      ? 'http://localhost:5000/api' 
+      : `http://${window.location.hostname}:${window.location.port || 3000}/api`)
+  : 'https://syudyhubbackend.onrender.com/api'; // CHANGE THIS TO YOUR DEPLOYED BACKEND URL ON RENDER
+
+async function request(endpoint, options = {}) {
+  const token = localStorage.getItem('token');
+  const headers = { ...options.headers };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  // Determine if sending FormData (multipart file upload) vs JSON body
+  const isFormData = options.body instanceof FormData;
+  if (!isFormData && options.body && typeof options.body === 'object') {
+    headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(options.body);
+  }
+
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const error = new Error(data.message || 'Something went wrong');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
+const api = {
+  // Auth API
+  async login(phone, password) {
+    const res = await request('/auth/login', {
+      method: 'POST',
+      body: { phone, password }
+    });
+    if (res.token) {
+      localStorage.setItem('token', res.token);
+      localStorage.setItem('user', JSON.stringify(res.user));
+      // Register Push Notifications token after successful login
+      setTimeout(setupPushNotifications, 2000);
+    }
+    return res;
+  },
+
+  async signup(name, phone, email, password, role) {
+    const res = await request('/auth/signup', {
+      method: 'POST',
+      body: { name, phone, email, password, role }
+    });
+    if (res.token) {
+      localStorage.setItem('token', res.token);
+      localStorage.setItem('user', JSON.stringify(res.user));
+    }
+    return res;
+  },
+
+  async updateName(name) {
+    const res = await request('/auth/name', {
+      method: 'PUT',
+      body: { name }
+    });
+    if (res.user) {
+      currentUser = res.user;
+      localStorage.setItem('user', JSON.stringify(res.user));
+    }
+    return res;
+  },
+
+  async updateEmail(email) {
+    const res = await request('/auth/email', {
+      method: 'PUT',
+      body: { email }
+    });
+    if (res.user) {
+      currentUser = res.user;
+      localStorage.setItem('user', JSON.stringify(res.user));
+    }
+    return res;
+  },
+
+  async forgotPassword(phone) {
+    return await request('/auth/request-otp', {
+      method: 'POST',
+      body: { phone }
+    });
+  },
+
+  async resendOtp(verificationId) {
+    return await request('/auth/resend-otp', {
+      method: 'POST',
+      body: { verificationId }
+    });
+  },
+
+  async verifyResetOtp(verificationId, otp, newPassword = null, confirmPassword = null) {
+    const payload = { verificationId, otp };
+    if (newPassword && confirmPassword) {
+      payload.newPassword = newPassword;
+      payload.confirmPassword = confirmPassword;
+    }
+    return await request('/auth/verify-otp', {
+      method: 'POST',
+      body: payload
+    });
+  },
+
+  async resetPasswordFinal(resetToken, newPassword, confirmPassword) {
+    return await request('/auth/reset-password-final', {
+      method: 'POST',
+      body: { resetToken, newPassword, confirmPassword }
+    });
+  },
+
+  async adminUpdateUserEmail(userId, email) {
+    return await request(`/auth/users/${userId}/email`, {
+      method: 'PUT',
+      body: { email }
+    });
+  },
+
+  async adminUpdateUserEmailByPhone(phone, email) {
+    return await request(`/auth/users/by-phone/${encodeURIComponent(phone)}/email`, {
+      method: 'PUT',
+      body: { email }
+    });
+  },
+
+  logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    if (typeof stopNotificationPolling === 'function') {
+      stopNotificationPolling();
+    }
+  },
+
+  getCurrentUser() {
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
+  },
+
+  async getMe() {
+    return await request('/auth/me');
+  },
+
+  async registerFCMToken(token) {
+    return await request('/auth/fcm-token', {
+      method: 'POST',
+      body: { token }
+    });
+  },
+
+  async getSetting(key) {
+    return await request(`/settings/${key}`);
+  },
+
+  async setSetting(key, value) {
+    return await request(`/settings/${key}`, {
+      method: 'PUT',
+      body: { value }
+    });
+  },
+
+  async getPendingUsers() {
+    return await request('/auth/pending');
+  },
+
+  async getAllUsers() {
+    return await request('/auth/users');
+  },
+
+  async exportUsers(params = {}) {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_BASE}/auth/users/export`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(params)
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to export users data');
+    }
+
+    if (params.format === 'json' || params.preview) {
+      return await response.json();
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    let filename = `studymyte_users_${params.role || 'all'}_${new Date().toISOString().slice(0, 10)}.csv`;
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    if (match && match[1]) {
+      filename = match[1];
+    }
+
+    return { blob, filename };
+  },
+
+  async approveUser(userId) {
+    return await request(`/auth/approve/${userId}`, { method: 'POST' });
+  },
+
+  async rejectUser(userId) {
+    return await request(`/auth/reject/${userId}`, { method: 'POST' });
+  },
+
+  async deleteUser(userId) {
+    return await request(`/auth/users/${userId}`, { method: 'DELETE' });
+  },
+
+  async promoteUser(userId) {
+    return await request(`/auth/promote/${userId}`, { method: 'POST' });
+  },
+
+  async resetPassword(oldPassword, newPassword, confirmPassword) {
+    return await request('/auth/reset-password', {
+      method: 'POST',
+      body: { oldPassword, newPassword, confirmPassword }
+    });
+  },
+
+  async adminResetPassword(userId) {
+    return await request(`/auth/users/${userId}/reset-password`, { method: 'POST' });
+  },
+
+  // Folders API
+  async getFolders(type, parentId = null) {
+    let url = `/folders?type=${type}`;
+    if (parentId !== null) {
+      url += `&parentId=${parentId}`;
+    } else {
+      url += `&parentId=null`;
+    }
+    return await request(url);
+  },
+
+  async getAllFolders(type) {
+    return await request(type ? `/folders?type=${type}` : '/folders');
+  },
+
+  async createFolder(name, type, parentId = null) {
+    return await request('/folders', {
+      method: 'POST',
+      body: { name, type, parentId }
+    });
+  },
+
+  async renameFolder(folderId, name) {
+    return await request(`/folders/${folderId}`, {
+      method: 'PUT',
+      body: { name }
+    });
+  },
+
+  async moveFolder(folderId, parentId) {
+    return await request(`/folders/${folderId}/move`, {
+      method: 'PUT',
+      body: { parentId }
+    });
+  },
+
+  async deleteFolder(folderId) {
+    return await request(`/folders/${folderId}`, {
+      method: 'DELETE'
+    });
+  },
+
+  // Documents API
+  async getDocuments(type, folderId = null) {
+    let url = `/documents?type=${type}`;
+    if (folderId !== null) {
+      url += `&folderId=${folderId}`;
+    }
+    return await request(url);
+  },
+
+  async uploadDocument(formData) {
+    return await request('/documents/upload', {
+      method: 'POST',
+      body: formData
+    });
+  },
+
+  async contributeDocument(formData) {
+    return await request('/documents/contribute', {
+      method: 'POST',
+      body: formData
+    });
+  },
+
+  async getPendingDocuments() {
+    return await request('/documents/pending');
+  },
+
+  async approveDocument(docId) {
+    return await request(`/documents/approve/${docId}`, {
+      method: 'POST'
+    });
+  },
+
+  async rejectDocument(docId) {
+    return await request(`/documents/reject/${docId}`, {
+      method: 'POST'
+    });
+  },
+
+  async deleteDocument(docId) {
+    return await request(`/documents/${docId}`, {
+      method: 'DELETE'
+    });
+  },
+
+  async moveDocument(docId, targetType, targetFolderId) {
+    return await request(`/documents/${docId}/move`, {
+      method: 'PUT',
+      body: { targetType, targetFolderId }
+    });
+  },
+
+  async getDuplicateGroups(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    return await request(`/documents/duplicate-groups${qs ? '?' + qs : ''}`);
+  },
+
+  async selectCanonicalPaper(groupId, canonicalDocumentId, reason = '') {
+    return await request(`/documents/duplicate-groups/${groupId}/select-canonical`, {
+      method: 'POST',
+      body: { canonicalDocId: canonicalDocumentId, canonicalDocumentId, reason }
+    });
+  },
+
+  async splitCandidatePaper(groupId, documentId, reason = '') {
+    return await request(`/documents/duplicate-groups/${groupId}/split-candidate/${documentId}`, {
+      method: 'POST',
+      body: { reason }
+    });
+  },
+
+  async getMyUploads() {
+    return await request('/documents/my-uploads');
+  },
+
+  async getPublicStats() {
+    return await request('/documents/public-stats');
+  },
+
+  async updateDocument(docId, title, subject, year) {
+    return await request(`/documents/${docId}`, {
+      method: 'PUT',
+      body: { title, subject, year }
+    });
+  },
+
+  // Announcements API
+  async getAnnouncements() {
+    return await request('/announcements');
+  },
+
+  async createAnnouncement(title, content, docUrl) {
+    return await request('/announcements', {
+      method: 'POST',
+      body: { title, content, docUrl }
+    });
+  },
+
+  async deleteAnnouncement(annId) {
+    return await request(`/announcements/${annId}`, {
+      method: 'DELETE'
+    });
+  },
+
+  // Help & Support API
+  async submitHelpRequest(subject, message, name = null, phone = null, role = null, requestedEmail = null) {
+    return await request('/help', {
+      method: 'POST',
+      body: { subject, message, name, phone, role, requestedEmail }
+    });
+  },
+
+  async getHelpRequests() {
+    return await request('/help');
+  },
+
+  async getMyHelpRequests() {
+    return await request('/help/my');
+  },
+
+  async resolveHelpRequest(requestId) {
+    return await request(`/help/resolve/${requestId}`, {
+      method: 'POST'
+    });
+  },
+
+  async deleteHelpRequest(requestId) {
+    return await request(`/help/${requestId}`, {
+      method: 'DELETE'
+    });
+  },
+
+  // Notifications API
+  async sendNotification(recipientId, message) {
+    return await request('/notifications', {
+      method: 'POST',
+      body: { recipientId, message }
+    });
+  },
+
+  async getUnreadNotifications() {
+    return await request('/notifications/unread');
+  },
+
+  async markNotificationRead(id) {
+    return await request(`/notifications/read/${id}`, {
+      method: 'POST'
+    });
+  },
+
+  async getMessageTemplates() {
+    return await request('/notifications/templates');
+  },
+
+  async saveMessageTemplate(name, content) {
+    return await request('/notifications/templates', {
+      method: 'POST',
+      body: { name, content }
+    });
+  },
+
+  async deleteMessageTemplate(id) {
+    return await request(`/notifications/templates/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
+  async getAllNotifications() {
+    return await request('/notifications/all');
+  },
+
+  async deleteNotification(id) {
+    return await request(`/notifications/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
+  async updateNotification(id, message) {
+    return await request(`/notifications/${id}`, {
+      method: 'PUT',
+      body: { message }
+    });
+  },
+
+  async toggleLikeDocument(docId) {
+    return await request(`/documents/${docId}/like`, { method: 'POST' });
+  },
+
+  async togglePinDocument(docId) {
+    return await request(`/documents/${docId}/pin`, { method: 'POST' });
+  },
+
+  async getTeacherRanking() {
+    return await request('/auth/teachers/ranking');
+  },
+
+  async getContributors() {
+    return await request('/auth/contributors');
+  },
+
+  async getTeacherStats() {
+    return await request('/auth/teachers/stats');
+  },
+
+  // Reviews API
+  async getMyReview() {
+    return await request('/reviews/my');
+  },
+  async submitReview(rating, comment) {
+    return await request('/reviews', {
+      method: 'POST',
+      body: { rating, comment }
+    });
+  },
+  async getAllReviews() {
+    return await request('/reviews');
+  },
+  async deleteReview(id) {
+    return await request(`/reviews/${id}`, {
+      method: 'DELETE'
+    });
+  }
+};
+
+// --- GLOBAL APPLICATION STATE ---
+let currentUser = null;
+let uploadSourceMode = 'file'; // 'file' | 'link' | 'scan'
+let scanImages = []; // Array of compressed scanned images { dataUrl, width, height }
+let cameraStream = null; // Holds the MediaStream object for camera capture
+let editingIndex = null; // The index of the scanned page currently being edited
+let editorRotation = 0; // Rotate state (0, 90, 180, 270)
+let editorFilter = 'original'; // Current filter name ('original', 'bw', 'gray')
+let editorImg = new Image(); // The original image object loaded into editor memory
+let notesFolderStack = []; // Multi-level folder stack for Notes: [yearFolder, branchFolder, subjectFolder, ...]
+let papersFolderStack = []; // Multi-level folder stack for Papers: [yearFolder, branchFolder, subjectFolder, ...]
+let labManualsFolderStack = []; // Multi-level folder stack for Lab Manuals
+let currentResourcesFolder = null;
+let currentResourcesSection = 'root'; // 'root' | 'syllabus' | 'lab_manuals' | 'lab_manuals_folder' | 'books' | 'books_folder' | 'simulations' | 'competitive' | 'competitive_folder' | 'calculator'
+let simulationFolderStack = [];
+let roadmapFolderStack = simulationFolderStack;
+let notesFoldersList = []; // Kept in memory to populate syllabus uploads
+// Legacy compatibility helpers
+function getCurrentNotesFolder() { return notesFolderStack.length > 0 ? notesFolderStack[notesFolderStack.length - 1] : null; }
+function getCurrentPapersFolder() { return papersFolderStack.length > 0 ? papersFolderStack[papersFolderStack.length - 1] : null; }
+function getCurrentLabManualsFolder() { return labManualsFolderStack.length > 0 ? labManualsFolderStack[labManualsFolderStack.length - 1] : null; }
+let activeDirectoryTab = 'admin'; // 'admin' | 'teacher' | 'student'
+let adminUserSearchQuery = '';
+let adminUsersCache = null;
+let directoryVisibleCount = 5;
+let helpRequestsVisibleCount = 5;
+let notificationsVisibleCount = 5;
+let reviewsVisibleCount = 5;
+
+// GPA Calculator State
+const GRADE_POINTS = { 'O': 10, 'A+': 9, 'A': 8, 'B+': 7, 'B': 6, 'C': 5, 'P': 4, 'F': 0 };
+let sgpaRows = [
+  { id: 1, courseName: '', credits: 4, grade: 'A+' },
+  { id: 2, courseName: '', credits: 3, grade: 'A' },
+  { id: 3, courseName: '', credits: 3, grade: 'B+' },
+  { id: 4, courseName: '', credits: 2, grade: 'A+' }
+];
+let cgpaRows = [
+  { id: 1, semesterName: 'Semester 1', sgpa: '', credits: 20 },
+  { id: 2, semesterName: 'Semester 2', sgpa: '', credits: 20 }
+];
+
+// Helper to calculate dynamic academic years
+function getAcademicYears() {
+  const currentYear = new Date().getFullYear();
+  const startYear = 2025;
+  const years = [];
+  const endLimit = Math.max(currentYear + 1, 2026);
+  for (let y = startYear; y < endLimit; y++) {
+    years.push(`${y}-${y + 1}`);
+  }
+  return years.reverse(); // Newest first
+}
+
+// Generate the Folder Icon HTML
+function getFolderIconSvg(color1 = '#4a90e2', color2 = '#1e56a0') {
+  return `
+    <svg width="68" height="68" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 5px 4px rgba(14, 56, 122, 0.15))">
+      <defs>
+        <linearGradient id="folder-grad-${color1.replace('#', '')}" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="${color1}" />
+          <stop offset="100%" stop-color="${color2}" />
+        </linearGradient>
+      </defs>
+      <path d="M10 24C10 20.6863 12.6863 18 16 18H40C43.3137 18 46 20.6863 46 24V27H90C93.3137 27 96 29.6863 96 33V76C96 79.3137 93.3137 82 90 82H10C6.68629 82 4 79.3137 4 76V24C4 20.6863 6.68629 18 10 18Z" fill="url(#folder-grad-${color1.replace('#', '')})" opacity="0.85" />
+      <rect x="20" y="22" width="60" height="35" rx="3" fill="#ffffff" opacity="0.95" />
+      <line x1="28" y1="28" x2="72" y2="28" stroke="#d9e2ec" stroke-width="2" />
+      <line x1="28" y1="36" x2="60" y2="36" stroke="#d9e2ec" stroke-width="2" />
+      <line x1="28" y1="44" x2="68" y2="44" stroke="#d9e2ec" stroke-width="2" />
+      <path d="M4 33C4 29.6863 6.68629 27 10 27H90C93.3137 27 96 29.6863 96 33V77C96 80.3137 93.3137 83 90 83H10C6.68629 83 4 80.3137 4 77V33Z" fill="url(#folder-grad-${color1.replace('#', '')})" />
+      <path d="M10 27.5H90" stroke="#ffffff" stroke-opacity="0.25" stroke-width="1.5" />
+    </svg>
+  `;
+}
+
+let myUploadsDocsList = [];
+
+function canManageDocument(doc) {
+  if (!currentUser) return false;
+  if (currentUser.role === 'admin' || currentUser.role === 'superadmin') return true;
+  if (currentUser.role === 'educator') {
+    return doc.uploadedByUserId === currentUser.id;
+  }
+  return false;
+}
+
+// --- DOM NAVIGATION & AUTH HELPERS ---
+function updateNavbar() {
+  const container = document.getElementById('nav-auth-container');
+  const adminTab = document.getElementById('nav-admin');
+  const mobMenu = document.getElementById('mobile-nav-menu');
+  const floatingContributeBtn = document.getElementById('btn-floating-contribute');
+  if (currentUser && currentUser.role === 'student') {
+    if (floatingContributeBtn) floatingContributeBtn.style.display = 'flex';
+  } else {
+    if (floatingContributeBtn) floatingContributeBtn.style.display = 'none';
+  }
+
+  if (currentUser) {
+    // Show admin dashboard tab for admin & superadmin
+    if (currentUser.role === 'admin' || currentUser.role === 'superadmin') {
+      if (adminTab) adminTab.style.display = 'flex';
+    } else {
+      if (adminTab) adminTab.style.display = 'none';
+    }
+
+    // Show My Uploads tab for staff (educators, admins, superadmins)
+    const myUploadsTab = document.getElementById('nav-my-uploads');
+    if (myUploadsTab) {
+      if (currentUser.role === 'educator' || currentUser.role === 'admin' || currentUser.role === 'superadmin') {
+        myUploadsTab.style.display = 'flex';
+      } else {
+        myUploadsTab.style.display = 'none';
+      }
+    }
+
+    // Show My Contributions tab for students only
+    const myContributionsTab = document.getElementById('nav-my-contributions');
+    if (myContributionsTab) {
+      if (currentUser.role === 'student') {
+        myContributionsTab.style.display = 'flex';
+      } else {
+        myContributionsTab.style.display = 'none';
+      }
+    }
+
+    // Show Teacher Dashboard tab for educators only
+    const teacherDashboardTab = document.getElementById('nav-teacher-dashboard');
+    if (teacherDashboardTab) {
+      if (currentUser.role === 'educator') {
+        teacherDashboardTab.style.display = 'flex';
+      } else {
+        teacherDashboardTab.style.display = 'none';
+      }
+    }
+
+    // Populate Desktop Auth State
+    // Populate Desktop Auth State
+    container.innerHTML = `
+      <div class="profile-dropdown-wrapper">
+        <button id="profile-trigger-btn" class="profile-dropdown-btn" type="button">
+          <i data-lucide="user" style="width: 16px; height: 16px;"></i>
+          <span>${escapeHTML(capitalizeName(currentUser.name))}</span>
+          <i data-lucide="chevron-down" style="width: 14px; height: 14px; margin-left: 2px; opacity: 0.7;"></i>
+        </button>
+        <div class="profile-dropdown-menu" id="profile-dropdown-menu" style="max-height: 80vh; overflow-y: auto; padding: 16px;">
+          <div class="profile-info-header" style="margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <div class="profile-name" style="font-weight: 700; font-size: 14px; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(capitalizeName(currentUser.name))}</div>
+              <button type="button" class="btn-open-edit-name" style="padding: 2px 7px; font-size: 10px; font-weight: 700; border-radius: 4px; background: var(--bg-hover, rgba(0,0,0,0.05)); color: var(--primary); border: 1px solid var(--border-color); cursor: pointer; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;" title="Edit Name">
+                <i data-lucide="pencil" style="width: 10px; height: 10px;"></i> Edit
+              </button>
+            </div>
+            <div class="profile-phone" style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+              <i data-lucide="phone" style="width: 12px; height: 12px;"></i>
+              ${escapeHTML(currentUser.phone)}
+            </div>
+            ${currentUser.email ? `
+              <div class="profile-email" style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-top: 5px;">
+                <div style="display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;" title="${escapeHTML(currentUser.email)}">
+                  <i data-lucide="mail" style="width: 12px; height: 12px; flex-shrink: 0; color: var(--primary);"></i>
+                  <span style="overflow: hidden; text-overflow: ellipsis;">${escapeHTML(currentUser.email)}</span>
+                </div>
+              </div>
+            ` : `
+              <div class="profile-email" style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 5px;">
+                <div style="display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 165px;" title="No email added">
+                  <i data-lucide="mail" style="width: 12px; height: 12px; flex-shrink: 0; color: var(--primary);"></i>
+                  <span style="overflow: hidden; text-overflow: ellipsis; color: #ef4444; font-style: italic;">No email added</span>
+                </div>
+                <button type="button" class="btn-open-update-email" style="padding: 2px 7px; font-size: 10px; font-weight: 700; border-radius: 4px; background: var(--primary); color: #fff; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; transition: var(--transition);" title="Link your email">
+                  + Add Email
+                </button>
+              </div>
+            `}
+          </div>
+          <div class="profile-role-container" style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; margin-bottom: 12px;">
+            <span class="profile-role-label" style="color: var(--text-muted); font-weight: 500; text-transform: uppercase;">Role:</span>
+            <span class="profile-role-badge" style="background-color: var(--primary-accent); color: var(--primary); font-weight: 700; padding: 2px 6px; border-radius: var(--radius-sm);">
+              ${currentUser.role === 'superadmin' ? 'Super Admin' : (currentUser.role === 'educator' ? 'Educator' : currentUser.role)}
+            </span>
+          </div>
+
+          <!-- Quick Navigation Shortcuts (for desktop scroll & easy access) -->
+          <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px;">
+            <a href="#/support" onclick="document.getElementById('profile-dropdown-menu').classList.remove('show');" class="profile-dropdown-link" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text-main); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: var(--radius-sm); transition: var(--transition); border: 1px solid var(--border-color); background-color: var(--primary-accent);">
+              <i data-lucide="help-circle" style="width: 14px; height: 14px; color: var(--primary);"></i> Help &amp; Support
+            </a>
+
+            ${currentUser.role === 'student' ? `
+              <a href="#/my-contributions" onclick="document.getElementById('profile-dropdown-menu').classList.remove('show');" class="profile-dropdown-link" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text-main); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: var(--radius-sm); transition: var(--transition); border: 1px solid var(--border-color); background-color: var(--primary-accent);">
+                <i data-lucide="award" style="width: 14px; height: 14px; color: var(--primary);"></i> My Contributions
+              </a>
+            ` : ''}
+            ${(currentUser.role === 'educator' || currentUser.role === 'admin' || currentUser.role === 'superadmin') ? `
+              <a href="#/my-uploads" onclick="document.getElementById('profile-dropdown-menu').classList.remove('show');" class="profile-dropdown-link" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text-main); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: var(--radius-sm); transition: var(--transition); border: 1px solid var(--border-color); background-color: var(--primary-accent);">
+                <i data-lucide="folder-heart" style="width: 14px; height: 14px; color: var(--primary);"></i> My Uploads
+              </a>
+            ` : ''}
+            ${currentUser.role === 'educator' ? `
+              <a href="#/teacher-dashboard" onclick="document.getElementById('profile-dropdown-menu').classList.remove('show');" class="profile-dropdown-link" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text-main); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: var(--radius-sm); transition: var(--transition); border: 1px solid var(--border-color); background-color: var(--primary-accent);">
+                <i data-lucide="presentation" style="width: 14px; height: 14px; color: var(--primary);"></i> Teacher Dashboard
+              </a>
+            ` : ''}
+            ${(currentUser.role === 'admin' || currentUser.role === 'superadmin') ? `
+              <a href="#/admin" onclick="document.getElementById('profile-dropdown-menu').classList.remove('show');" class="profile-dropdown-link" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text-main); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: var(--radius-sm); transition: var(--transition); border: 1px solid var(--border-color); background-color: var(--primary-accent);">
+                <i data-lucide="shield-alert" style="width: 14px; height: 14px; color: var(--primary);"></i> Admin Dashboard
+              </a>
+            ` : ''}
+            <a href="javascript:void(0)" onclick="document.getElementById('profile-dropdown-menu').classList.remove('show');" class="profile-dropdown-link btn-download-app-trigger" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--primary); font-size: 13px; font-weight: 700; padding: 8px 12px; border-radius: var(--radius-sm); transition: var(--transition); border: 1px solid var(--border-color); background-color: var(--primary-accent);">
+              <i data-lucide="smartphone" style="width: 14px; height: 14px; color: var(--primary);"></i> Download App
+            </a>
+          </div>
+
+          <!-- Academic Sections & Utilities -->
+          <a href="#/about" onclick="document.getElementById('profile-dropdown-menu').classList.remove('show');" class="profile-dropdown-link" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text-main); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: var(--radius-sm); transition: var(--transition); margin-bottom: 6px; border: 1px solid var(--border-color); background-color: var(--primary-accent);">
+            <i data-lucide="info" style="width: 14px; height: 14px; color: var(--primary);"></i> About Us
+          </a>
+          <a href="#/appearance" class="profile-dropdown-link" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text-main); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: var(--radius-sm); transition: var(--transition); margin-bottom: 6px; border: 1px solid var(--border-color); background-color: var(--primary-accent);">
+            <i data-lucide="type" style="width: 14px; height: 14px; color: var(--primary);"></i> Typography & Fonts
+          </a>
+          <a href="#/contributors" onclick="document.getElementById('profile-dropdown-menu').classList.remove('show');" class="profile-dropdown-link" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text-main); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: var(--radius-sm); transition: var(--transition); margin-bottom: 6px; border: 1px solid var(--border-color); background-color: var(--primary-accent);">
+            <i data-lucide="trophy" style="width: 14px; height: 14px; color: var(--primary);"></i> Top Contributors
+          </a>
+          <a href="javascript:void(0)" onclick="downloadUserManual(); document.getElementById('profile-dropdown-menu').classList.remove('show');" class="profile-dropdown-link" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text-main); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: var(--radius-sm); transition: var(--transition); margin-bottom: 6px; border: 1px solid var(--border-color); background-color: var(--primary-accent);">
+            <i data-lucide="file-text" style="width: 14px; height: 14px; color: var(--primary);"></i> View Manual
+          </a>
+          <a href="#/reset-password" class="profile-dropdown-link" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text-main); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: var(--radius-sm); transition: var(--transition); margin-bottom: 6px; border: 1px solid var(--border-color); background-color: var(--primary-accent);">
+            <i data-lucide="key-round" style="width: 14px; height: 14px; color: var(--primary);"></i> Reset Password
+          </a>
+          <a href="#/reviews" class="profile-dropdown-link" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text-main); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: var(--radius-sm); transition: var(--transition); margin-bottom: 6px; border: 1px solid var(--border-color); background-color: var(--primary-accent);">
+            <i data-lucide="star" style="width: 14px; height: 14px; color: var(--primary);"></i> Write a Review
+          </a>
+          <a href="https://github.com/ankitgl200/studymyteStudents" target="_blank" rel="noopener noreferrer" class="profile-dropdown-link" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text-main); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: var(--radius-sm); transition: var(--transition); margin-bottom: 6px; border: 1px solid var(--border-color); background-color: var(--primary-accent);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; color: var(--primary);"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg> Contribute
+          </a>
+          <a href="#/terms" class="profile-dropdown-link" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text-main); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: var(--radius-sm); transition: var(--transition); margin-bottom: 6px; border: 1px solid var(--border-color); background-color: var(--primary-accent);">
+            <i data-lucide="file-text" style="width: 14px; height: 14px; color: var(--primary);"></i> Terms of Service
+          </a>
+          <a href="#/privacy" class="profile-dropdown-link" style="display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text-main); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: var(--radius-sm); transition: var(--transition); margin-bottom: 12px; border: 1px solid var(--border-color); background-color: var(--primary-accent);">
+            <i data-lucide="shield" style="width: 14px; height: 14px; color: var(--primary);"></i> Privacy Policy
+          </a>
+
+          <button id="btn-logout" class="btn btn-danger btn-sm profile-logout-btn" style="display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 12px; width: 100%;">
+            <i data-lucide="log-out" style="width: 14px; height: 14px;"></i> Logout
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Click handler to toggle showing on click (for mobile-tablet or explicit click behavior)
+    const trigger = document.getElementById('profile-trigger-btn');
+    const menu = document.getElementById('profile-dropdown-menu');
+    if (trigger && menu) {
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        menu.classList.toggle('show');
+      });
+      document.addEventListener('click', () => {
+        menu.classList.remove('show');
+      });
+      menu.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+    }
+
+    document.getElementById('btn-logout').addEventListener('click', () => {
+      api.logout();
+      currentUser = null;
+
+      updateNavbar();
+      navigate('/');
+    });
+
+    // Populate Mobile Menu
+    mobMenu.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+        <div style="display: flex; flex-direction: column;">
+          <span style="font-weight: 700; font-size: 16px; color: var(--text-main); line-height: 1.2;">${escapeHTML(capitalizeName(currentUser.name))}</span>
+          <span style="font-size: 11px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; margin-top: 2px;">Role: ${currentUser.role === 'superadmin' ? 'Super Admin' : currentUser.role}</span>
+        </div>
+        <button id="btn-close-mobile-menu" class="btn-close-mobile-menu" style="margin: 0; padding: 4px;" aria-label="Close Menu">
+          <i data-lucide="x" style="width: 20px; height: 20px;"></i>
+        </button>
+      </div>
+      <div style="font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-bottom: 4px; margin-left: 4px;">
+        <i data-lucide="phone" style="width: 12px; height: 12px;"></i> ${escapeHTML(currentUser.phone)}
+      </div>
+      <div class="mobile-nav-links">
+        <a href="#/" class="mobile-nav-link" id="mob-nav-home"><i data-lucide="home" style="width: 18px; height: 18px;"></i> Home</a>
+        <a href="#/notes" class="mobile-nav-link" id="mob-nav-notes"><i data-lucide="book-open" style="width: 18px; height: 18px;"></i> Notes</a>
+        <a href="#/papers" class="mobile-nav-link" id="mob-nav-papers"><i data-lucide="file-text" style="width: 18px; height: 18px;"></i> Papers</a>
+        <a href="#/resources" class="mobile-nav-link" id="mob-nav-resources"><i data-lucide="compass" style="width: 18px; height: 18px;"></i> Resources</a>
+        <a href="#/support" class="mobile-nav-link" id="mob-nav-support"><i data-lucide="help-circle" style="width: 18px; height: 18px;"></i> Help & Support</a>
+        <a href="https://mail.google.com/mail/?view=cm&fs=1&to=support@studymyte.tech&su=StudyMyte%20Support%20Inquiry" target="_blank" rel="noopener noreferrer" class="mobile-nav-link" id="mob-nav-email"><i data-lucide="mail" style="width: 18px; height: 18px; color: #ea4335;"></i> Email Support</a>
+
+        <a href="#/reset-password" class="mobile-nav-link" id="mob-nav-reset-password"><i data-lucide="key-round" style="width: 18px; height: 18px;"></i> Reset Password</a>
+        <a href="https://github.com/ankitgl200/studymyteStudents" target="_blank" rel="noopener noreferrer" class="mobile-nav-link" id="mob-nav-contribute"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; color: var(--primary);"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg> Contribute</a>
+
+        ${currentUser.role === 'student' ? `
+          <a href="#/my-contributions" class="mobile-nav-link" id="mob-nav-my-contributions"><i data-lucide="award" style="width: 18px; height: 18px;"></i> My Contributions</a>
+        ` : ''}
+        ${(currentUser.role === 'educator' || currentUser.role === 'admin' || currentUser.role === 'superadmin') ? `
+          <a href="#/my-uploads" class="mobile-nav-link" id="mob-nav-my-uploads"><i data-lucide="folder-heart" style="width: 18px; height: 18px;"></i> My Uploads</a>
+        ` : ''}
+        ${currentUser.role === 'educator' ? `
+          <a href="#/teacher-dashboard" class="mobile-nav-link" id="mob-nav-teacher-dashboard"><i data-lucide="presentation" style="width: 18px; height: 18px;"></i> Teacher Dashboard</a>
+        ` : ''}
+        ${(currentUser.role === 'admin' || currentUser.role === 'superadmin') ? `
+          <a href="#/admin" class="mobile-nav-link" id="mob-nav-admin"><i data-lucide="shield-alert" style="width: 18px; height: 18px;"></i> Admin</a>
+        ` : ''}
+      </div>
+      <button class="btn btn-primary btn-download-app-trigger" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; font-weight: 600; margin-top: auto; margin-bottom: 12px;">
+        <i data-lucide="smartphone" style="width: 18px; height: 18px;"></i> Download App
+      </button>
+      <button id="btn-mobile-logout" class="btn btn-danger" style="width: 100%;">
+        <i data-lucide="log-out" style="width: 18px; height: 18px;"></i> Logout
+      </button>
+    `;
+
+    // Click handler for Close Button inside Mobile Drawer
+    const btnClose = document.getElementById('btn-close-mobile-menu');
+    if (btnClose) {
+      btnClose.addEventListener('click', () => {
+        mobMenu.classList.remove('open');
+        const overlay = document.getElementById('mobile-nav-overlay');
+        if (overlay) overlay.classList.remove('open');
+        document.body.style.overflow = ''; // RESTORE PAGE SCROLL
+      });
+    }
+
+    document.getElementById('btn-mobile-logout').addEventListener('click', () => {
+      api.logout();
+      currentUser = null;
+      document.body.style.overflow = '';
+      updateNavbar();
+      navigate('/');
+    });
+
+  } else {
+    if (floatingContributeBtn) floatingContributeBtn.style.display = 'none';
+    if (adminTab) adminTab.style.display = 'none';
+    const myUploadsTab = document.getElementById('nav-my-uploads');
+    if (myUploadsTab) myUploadsTab.style.display = 'none';
+    const myContributionsTab = document.getElementById('nav-my-contributions');
+    if (myContributionsTab) myContributionsTab.style.display = 'none';
+    
+    // Populate Desktop Auth State (Logged out)
+    container.innerHTML = `
+      <div style="display: flex; gap: 8px; margin-left: 12px;">
+        <a href="#/login" class="nav-link">Login</a>
+        <a href="#/signup" class="btn btn-primary btn-sm">Sign Up</a>
+      </div>
+    `;
+
+    // Populate Mobile Menu (Logged out)
+    mobMenu.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 8px;">
+        <span style="font-weight: 800; font-size: 18px; color: var(--primary-dark);">StudyMyte</span>
+        <button id="btn-close-mobile-menu" class="btn-close-mobile-menu" style="margin: 0; padding: 4px;" aria-label="Close Menu">
+          <i data-lucide="x" style="width: 20px; height: 20px;"></i>
+        </button>
+      </div>
+      <div class="mobile-nav-links">
+        <a href="#/" class="mobile-nav-link" id="mob-nav-home"><i data-lucide="home" style="width: 18px; height: 18px;"></i> Home</a>
+        <a href="#/notes" class="mobile-nav-link" id="mob-nav-notes"><i data-lucide="book-open" style="width: 18px; height: 18px;"></i> Notes</a>
+        <a href="#/papers" class="mobile-nav-link" id="mob-nav-papers"><i data-lucide="file-text" style="width: 18px; height: 18px;"></i> Papers</a>
+        <a href="#/resources" class="mobile-nav-link" id="mob-nav-resources"><i data-lucide="compass" style="width: 18px; height: 18px;"></i> Resources</a>
+        <a href="#/support" class="mobile-nav-link" id="mob-nav-support"><i data-lucide="help-circle" style="width: 18px; height: 18px;"></i> Help & Support</a>
+        <a href="https://mail.google.com/mail/?view=cm&fs=1&to=support@studymyte.tech&su=StudyMyte%20Support%20Inquiry" target="_blank" rel="noopener noreferrer" class="mobile-nav-link" id="mob-nav-email-guest"><i data-lucide="mail" style="width: 18px; height: 18px; color: #ea4335;"></i> Email Support</a>
+
+      </div>
+      <button class="btn btn-primary btn-download-app-trigger" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; font-weight: 600; margin-top: auto; margin-bottom: 12px;">
+        <i data-lucide="smartphone" style="width: 18px; height: 18px;"></i> Download App
+      </button>
+      <div style="display: flex; gap: 8px; width: 100%;">
+        <a href="#/login" class="nav-link btn btn-secondary" style="flex: 1; text-align: center; justify-content: center; padding: 10px 0;">Login</a>
+        <a href="#/signup" class="btn btn-primary" style="flex: 1; text-align: center; justify-content: center; padding: 10px 0;">Sign Up</a>
+      </div>
+    `;
+
+    // Click handler for Close Button inside Mobile Drawer (Logged out)
+    const btnClose = document.getElementById('btn-close-mobile-menu');
+    if (btnClose) {
+      btnClose.addEventListener('click', () => {
+        mobMenu.classList.remove('open');
+        const overlay = document.getElementById('mobile-nav-overlay');
+        if (overlay) overlay.classList.remove('open');
+        document.body.style.overflow = ''; // RESTORE PAGE SCROLL
+      });
+    }
+  }
+  refreshIcons();
+}
+
+// ----------------------------------------------------------------
+// DESKTOP SCROLL NAV ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Instant, fluid, cancelable anime.js engine
+// ----------------------------------------------------------------
+function initDesktopScrollNav() {
+  const navbar   = document.querySelector('.navbar');
+  const navLinks = document.getElementById('desktop-nav-links');
+  const dock     = document.getElementById('dock');
+  if (!navbar || !navLinks || !dock) return;
+
+  const SCROLL_THRESHOLD = 50;
+  let currentState = 'top'; // 'top' or 'dock'
+
+  function getVisibleLinks() {
+    return Array.from(navLinks.querySelectorAll('.nav-link')).filter(l => {
+      const s = window.getComputedStyle(l);
+      return s.display !== 'none';
+    });
+  }
+
+  function setNavState(targetState) {
+    if (window.innerWidth < 769) return;
+    if (currentState === targetState) return;
+    currentState = targetState;
+
+    const links = getVisibleLinks();
+
+    // Cancel all current animations on these elements to prevent getting stuck
+    anime.remove(links);
+    anime.remove(dock);
+
+    if (targetState === 'dock') {
+      // 1. Prepare DOM
+      navbar.classList.add('scrolled');
+      dock.classList.add('desktop-scrolled-show');
+      updateDockActiveTab();
+
+      // Measure center for left-to-center / right-to-center convergence
+      const navRect = navLinks.getBoundingClientRect();
+      const navCenterX = navRect.left + navRect.width / 2;
+      const offsets = links.map(link => {
+        const rect = link.getBoundingClientRect();
+        const linkCenterX = rect.left + rect.width / 2;
+        return navCenterX - linkCenterX;
+      });
+
+      // Animate buttons to center and slide down
+      anime({
+        targets: links,
+        translateX: (el, i) => offsets[i] || 0,
+        translateY: 30,
+        opacity: [1, 0],
+        scale: [1, 0.8],
+        duration: 160,
+        easing: 'easeInQuad',
+        complete: () => {
+          if (currentState === 'dock') {
+            navLinks.style.visibility = 'hidden';
+            navLinks.style.display = 'none';
+          }
+        }
+      });
+
+      // Animate bottom dock up
+      anime({
+        targets: dock,
+        translateY: ['60px', '0px'],
+        opacity: [0, 1],
+        duration: 200,
+        easing: 'easeOutCubic'
+      });
+
+    } else {
+      // Return to 'top' desktop navbar state
+      navLinks.style.display = '';
+      navLinks.style.visibility = '';
+      navbar.classList.remove('scrolled');
+
+      // Animate dock down and remove
+      anime({
+        targets: dock,
+        translateY: [0, '60px'],
+        opacity: [1, 0],
+        duration: 140,
+        easing: 'easeInQuad',
+        complete: () => {
+          if (currentState === 'top') {
+            dock.classList.remove('desktop-scrolled-show');
+            dock.style.transform = '';
+            dock.style.opacity = '';
+          }
+        }
+      });
+
+      // Animate top nav buttons springing back out into position
+      anime({
+        targets: links,
+        translateX: 0,
+        translateY: 0,
+        scale: 1,
+        opacity: 1,
+        duration: 180,
+        easing: 'easeOutBack',
+        complete: () => {
+          if (currentState === 'top') {
+            links.forEach(l => {
+              l.style.transform = '';
+              l.style.opacity = '';
+            });
+          }
+        }
+      });
+    }
+  }
+
+  // Use requestAnimationFrame for immediate, non-laggy, non-dropping scroll response
+  let ticking = false;
+  function onScroll() {
+    if (window.innerWidth < 769) return;
+    const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+
+    if (scrollY > SCROLL_THRESHOLD) {
+      setNavState('dock');
+    } else {
+      setNavState('top');
+    }
+    ticking = false;
+  }
+
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      window.requestAnimationFrame(onScroll);
+      ticking = true;
+    }
+  }, { passive: true });
+
+  // Initial check on load
+  onScroll();
+
+  // Handle window resize
+  window.addEventListener('resize', () => {
+    if (window.innerWidth < 769) {
+      currentState = 'top';
+      dock.classList.remove('desktop-scrolled-show');
+      navbar.classList.remove('scrolled');
+      navLinks.style.visibility = '';
+      getVisibleLinks().forEach(l => {
+        anime.remove(l);
+        l.style.transform = '';
+        l.style.opacity = '';
+      });
+      anime.remove(dock);
+      dock.style.transform = '';
+      dock.style.opacity = '';
+    } else {
+      onScroll();
+    }
+  });
+
+  // Active tab highlight
+  function updateDockActiveTab() {
+    const hash = window.location.hash || '#/';
+    const tabMap = {
+      '#/': 'bottom-nav-home',
+      '#/notes': 'bottom-nav-notes',
+      '#/papers': 'bottom-nav-papers',
+      '#/resources': 'bottom-nav-resources',
+      '#/profile': 'bottom-nav-profile'
+    };
+    dock.querySelectorAll('.mobile-bottom-nav-item').forEach(t => t.removeAttribute('aria-selected'));
+    const activeId = tabMap[hash];
+    if (activeId) {
+      const el = document.getElementById(activeId);
+      if (el) el.setAttribute('aria-selected', 'true');
+    }
+  }
+
+  window.addEventListener('hashchange', updateDockActiveTab);
+  updateDockActiveTab();
+}
+
+function handleAuthProtection(path) {
+  let cleanPath = path;
+  if (cleanPath.startsWith('#/')) {
+    cleanPath = cleanPath.slice(1);
+  } else if (cleanPath.startsWith('#')) {
+    cleanPath = cleanPath.slice(1);
+  }
+  cleanPath = cleanPath.split('?')[0];
+  if (cleanPath.endsWith('/') && cleanPath.length > 1) {
+    cleanPath = cleanPath.slice(0, -1);
+  }
+  if (!cleanPath.startsWith('/')) {
+    cleanPath = '/' + cleanPath;
+  }
+
+  const publicRoutes = ['/', '/login', '/signup', '/forgot-password', '/support', '/terms', '/privacy', '/contributors', '/appearance', '/reviews'];
+  if (!publicRoutes.includes(cleanPath) && !currentUser) {
+    navigate('/login');
+    return false;
+  }
+  if (cleanPath.startsWith('/admin') && currentUser && currentUser.role !== 'admin' && currentUser.role !== 'superadmin') {
+    navigate('/');
+    return false;
+  }
+  if (cleanPath === '/my-uploads' && currentUser && currentUser.role !== 'educator' && currentUser.role !== 'admin' && currentUser.role !== 'superadmin') {
+    navigate('/');
+    return false;
+  }
+  if (cleanPath === '/my-contributions' && currentUser && currentUser.role !== 'student') {
+    navigate('/');
+    return false;
+  }
+  if (cleanPath === '/teacher-dashboard' && currentUser && currentUser.role !== 'educator') {
+    navigate('/');
+    return false;
+  }
+  return true;
+}
+
+function navigate(path) {
+  let cleanPath = path;
+  if (cleanPath.startsWith('#/')) {
+    cleanPath = cleanPath.slice(2);
+  } else if (cleanPath.startsWith('#') && cleanPath.includes('/')) {
+    cleanPath = cleanPath.slice(1);
+  }
+  if (cleanPath.startsWith('/')) {
+    cleanPath = cleanPath.slice(1);
+  }
+  const newHash = '#/' + cleanPath;
+  if (window.location.hash === newHash) {
+    router();
+  } else {
+    window.location.hash = newHash;
+  }
+}
+
+function getHashQueryParams() {
+  const params = {};
+  const searchParams = new URLSearchParams(window.location.search);
+  for (const [key, value] of searchParams.entries()) {
+    params[key] = value;
+  }
+  const hash = window.location.hash;
+  const qIndex = hash.indexOf('?');
+  if (qIndex !== -1) {
+    const qStr = hash.slice(qIndex + 1);
+    const pairs = qStr.split('&');
+    for (const pair of pairs) {
+      const [key, value] = pair.split('=');
+      if (key) {
+        params[decodeURIComponent(key)] = decodeURIComponent(value || '');
+      }
+    }
+  }
+  return params;
+}
+
+// --- ROUTER ENGINE ---
+async function router() {
+  // Extract clean pathname (and support hash fallback for backwards compatibility)
+  let cleanPath = window.location.pathname || '/';
+  if (window.location.hash && window.location.hash.startsWith('#/')) {
+    cleanPath = window.location.hash.slice(1);
+  } else if (window.location.hash && window.location.hash.startsWith('#') && window.location.hash.includes('/')) {
+    cleanPath = window.location.hash.slice(1);
+  }
+  cleanPath = cleanPath.split('?')[0];
+  if (cleanPath.endsWith('/') && cleanPath.length > 1) {
+    cleanPath = cleanPath.slice(0, -1);
+  }
+  if (!cleanPath.startsWith('/')) {
+    cleanPath = '/' + cleanPath;
+  }
+
+  const adSpace = document.getElementById('site-ad-space');
+  if (adSpace) adSpace.style.display = 'none';
+  
+  // Update navbar active state
+  document.querySelectorAll('.nav-links .nav-link').forEach(link => {
+    let href = link.getAttribute('href');
+    if (href) {
+      if (href.startsWith('#/')) href = href.slice(1);
+      else if (href.startsWith('#')) href = href.slice(1);
+      if (!href.startsWith('/')) href = '/' + href;
+      href = href.split('?')[0];
+      
+      if (href === cleanPath) {
+        link.classList.add('active');
+      } else {
+        link.classList.remove('active');
+      }
+    }
+  });
+
+  // Update mobile navbar active state
+  document.querySelectorAll('.mobile-nav-menu .mobile-nav-link').forEach(link => {
+    let href = link.getAttribute('href');
+    if (href) {
+      if (href.startsWith('#/')) href = href.slice(1);
+      else if (href.startsWith('#')) href = href.slice(1);
+      if (!href.startsWith('/')) href = '/' + href;
+      href = href.split('?')[0];
+
+      if (href === cleanPath) {
+        link.classList.add('active');
+      } else {
+        link.classList.remove('active');
+      }
+    }
+  });
+
+  // Close mobile nav menu when navigating
+  const mobMenu = document.getElementById('mobile-nav-menu');
+  if (mobMenu) {
+    mobMenu.classList.remove('open');
+  }
+  const mobOverlay = document.getElementById('mobile-nav-overlay');
+  if (mobOverlay) {
+    mobOverlay.classList.remove('open');
+  }
+  document.body.style.overflow = ''; // RESTORE PAGE SCROLL
+
+  // Run protection check
+  if (!handleAuthProtection(cleanPath)) return;
+
+  // Update mobile bottom nav active state instantly before asynchronous loading
+  document.querySelectorAll('.mobile-bottom-nav-item').forEach(link => {
+    let href = link.getAttribute('href');
+    if (href) {
+      if (href.startsWith('#/')) href = href.slice(1);
+      else if (href.startsWith('#')) href = href.slice(1);
+      if (!href.startsWith('/')) href = '/' + href;
+      href = href.split('?')[0];
+
+      if (href === cleanPath) {
+        link.classList.add('active');
+      } else {
+        link.classList.remove('active');
+      }
+    }
+  });
+
+  const bottomNav = document.querySelector('.mobile-bottom-nav');
+  if (bottomNav) {
+    if (cleanPath === '/login' || cleanPath === '/signup' || cleanPath === '/forgot-password') {
+      bottomNav.style.setProperty('display', 'none', 'important');
+    } else {
+      bottomNav.style.removeProperty('display');
+    }
+  }
+  updateMobileBottomNavPosition();
+
+  // Toggle page visibility
+  document.querySelectorAll('.page-view').forEach(view => {
+    if (view.id === 'view-loading') return;
+    view.style.display = 'none';
+    view.classList.remove('route-enter');
+  });
+
+  // Cleanup auth scene elements and tilt when navigating away from auth pages
+  if (cleanPath !== '/login' && cleanPath !== '/signup' && cleanPath !== '/forgot-password') {
+    document.querySelectorAll('.auth-bubble, .auth-sparkle, .auth-particle').forEach(el => el.remove());
+    const prevBook = document.querySelector('.auth-book');
+    if (prevBook && prevBook._tiltCleanup) prevBook._tiltCleanup();
+  }
+
+  // Detect flip direction when toggling login ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â signup
+  const prevPath = router._prevPath || '';
+  if (cleanPath === '/signup' && prevPath === '/login') setAuthFlipDirection('forward');
+  else if (cleanPath === '/login' && prevPath === '/signup') setAuthFlipDirection('backward');
+  router._prevPath = cleanPath;
+
+  // Close any open modals when navigating
+  closeAllModals();
+
+  if (cleanPath === '/' || cleanPath === '') {
+    document.getElementById('view-home').style.display = 'block';
+    await renderHomeView();
+  } else if (cleanPath === '/login') {
+    if (currentUser) return navigate('/');
+    document.getElementById('view-login').style.display = 'block';
+    document.getElementById('login-error-alert').style.display = 'none';
+    setAuthBookMode('login', false);
+  } else if (cleanPath === '/forgot-password') {
+    document.getElementById('view-forgot-password').style.display = 'block';
+    renderForgotPasswordView();
+  } else if (cleanPath === '/signup') {
+    if (currentUser) return navigate('/');
+    document.getElementById('view-login').style.display = 'block';
+    document.getElementById('signup-error-alert').style.display = 'none';
+    document.getElementById('signup-success-alert').style.display = 'none';
+    setAuthBookMode('signup', false);
+  } else if (cleanPath === '/notes') {
+    document.getElementById('view-notes').style.display = 'block';
+    await renderNotesView();
+  } else if (cleanPath === '/papers') {
+    document.getElementById('view-papers').style.display = 'block';
+    await renderPapersView();
+  } else if (cleanPath === '/resources') {
+    document.getElementById('view-resources').style.display = 'block';
+    await renderResourcesView();
+  } else if (cleanPath.startsWith('/admin')) {
+    const isMobile = window.innerWidth <= 768;
+    if (!isMobile) {
+      if (cleanPath === '/admin/approvals') {
+        return navigate('/admin?tab=pending');
+      } else if (cleanPath === '/admin/users') {
+        return navigate('/admin?tab=users');
+      } else if (cleanPath === '/admin/reviews') {
+        return navigate('/admin?tab=reviews');
+      } else if (cleanPath === '/admin/contributions' || cleanPath === '/admin/support' || cleanPath === '/admin/notifications') {
+        return navigate('/admin');
+      }
+    } else {
+      if (cleanPath === '/admin' || cleanPath === '/admin/') {
+        return navigate('/admin/approvals');
+      }
+    }
+    directoryVisibleCount = 5;
+    helpRequestsVisibleCount = 5;
+    notificationsVisibleCount = 5;
+    reviewsVisibleCount = 5;
+    document.getElementById('view-admin').style.display = 'block';
+    await renderAdminDashboardView(cleanPath);
+  } else if (cleanPath === '/my-uploads') {
+    document.getElementById('view-my-uploads').style.display = 'block';
+    await renderMyUploadsView();
+  } else if (cleanPath === '/my-contributions') {
+    document.getElementById('view-my-contributions').style.display = 'block';
+    await renderMyContributionsView();
+  } else if (cleanPath === '/contributors') {
+    document.getElementById('view-contributors').style.display = 'block';
+    await renderContributorsView();
+  } else if (cleanPath === '/about') {
+    document.getElementById('view-about').style.display = 'block';
+    await renderAboutView();
+  } else if (cleanPath === '/support') {
+    document.getElementById('view-support').style.display = 'block';
+    await renderSupportView();
+  } else if (cleanPath === '/reviews') {
+    document.getElementById('view-reviews').style.display = 'block';
+    await renderReviewsView();
+  } else if (cleanPath === '/teacher-dashboard') {
+    document.getElementById('view-teacher-dashboard').style.display = 'block';
+    await renderTeacherDashboardView();
+  } else if (cleanPath === '/reset-password') {
+    document.getElementById('view-reset-password').style.display = 'block';
+    document.getElementById('reset-password-error-alert').style.display = 'none';
+    document.getElementById('reset-password-success-alert').style.display = 'none';
+    document.getElementById('reset-old-password').value = '';
+    document.getElementById('reset-new-password').value = '';
+    document.getElementById('reset-confirm-password').value = '';
+  } else if (cleanPath === '/profile') {
+    document.getElementById('view-profile').style.display = 'block';
+    renderProfileView();
+  } else if (cleanPath === '/appearance') {
+    document.getElementById('view-appearance').style.display = 'block';
+    renderAppearanceView();
+  } else if (cleanPath === '/terms') {
+    navigate('/');
+    setTimeout(() => showTermsModal(), 100);
+    return;
+  } else if (cleanPath === '/privacy') {
+    navigate('/');
+    setTimeout(() => showPrivacyModal(), 100);
+    return;
+  } else {
+    document.getElementById('view-home').style.display = 'block';
+    await renderHomeView();
+  }
+
+  // Update mobile top bar page title
+  const titleEl = document.getElementById('mobile-page-title');
+  if (titleEl) {
+    if (cleanPath === '/' || cleanPath === '') titleEl.textContent = 'StudyMyte';
+    else if (cleanPath === '/notes') titleEl.textContent = 'Notes';
+    else if (cleanPath === '/papers') titleEl.textContent = 'Papers';
+    else if (cleanPath === '/resources') titleEl.textContent = 'Resources';
+    else if (cleanPath === '/profile') titleEl.textContent = 'Profile';
+    else if (cleanPath === '/admin') titleEl.textContent = 'Admin';
+    else if (cleanPath === '/my-uploads') titleEl.textContent = 'My Uploads';
+    else if (cleanPath === '/my-contributions') titleEl.textContent = 'Contributions';
+    else if (cleanPath === '/support') titleEl.textContent = 'Support';
+    else if (cleanPath === '/reviews') titleEl.textContent = 'Reviews';
+    else if (cleanPath === '/reset-password') titleEl.textContent = 'Reset Password';
+    else if (cleanPath === '/terms') titleEl.textContent = 'Terms';
+    else if (cleanPath === '/privacy') titleEl.textContent = 'Privacy';
+    else titleEl.textContent = 'StudyMyte';
+  }
+
+  const activeView = Array.from(document.querySelectorAll('.page-view'))
+    .find(view => view.style.display !== 'none');
+
+  if (activeView) {
+    requestAnimationFrame(() => activeView.classList.add('route-enter'));
+  }
+
+  if (adSpace) adSpace.style.display = 'none';
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+
+  refreshIcons();
+}
+
+// --- VIEW RENDERERS ---
+
+// 1. HOME VIEW (Announcements)
+async function renderHomeView() {
+  const clubsBtn = document.getElementById('home-btn-clubs') || document.getElementById('home-btn-contributors');
+  if (clubsBtn) {
+    clubsBtn.style.display = 'inline-flex';
+  }
+
+  const container = document.getElementById('announcements-list-container');
+  const addAnnBtn = document.getElementById('btn-add-announcement');
+  const annForm = document.getElementById('form-announcement');
+
+  // Toggle announcement button for admin and teachers
+  if (addAnnBtn) {
+    if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin' || currentUser.role === 'educator')) {
+      addAnnBtn.style.display = 'flex';
+    } else {
+      addAnnBtn.style.display = 'none';
+      if (annForm) annForm.style.display = 'none';
+    }
+  }
+
+  // Load and render contributor rankings on the leaderboard card
+  const leaderboardList = document.getElementById('contributor-ranking-list');
+  if (leaderboardList) {
+    leaderboardList.innerHTML = getLeaderboardSkeleton();
+    api.getContributors()
+      .then(ranking => {
+        const topRanking = ranking.slice(0, 5);
+        if (topRanking.length === 0) {
+          leaderboardList.innerHTML = '<div style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px 0;">No contributors yet</div>';
+        } else {
+          leaderboardList.innerHTML = topRanking.map((c, index) => {
+            const rankNum = index + 1;
+            let trophy = '';
+            if (rankNum === 1) trophy = '\uD83E\uDD47';
+            else if (rankNum === 2) trophy = '\uD83E\uDD48';
+            else if (rankNum === 3) trophy = '\uD83E\uDD49';
+
+            const isSelf = currentUser && currentUser.id === c.id;
+            const bgStyle = isSelf ? 'background-color: rgba(34, 197, 94, 0.05);' : '';
+
+            return `
+              <div style="display: flex; align-items: center; padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); ${bgStyle} font-size: 14px; gap: 12px; background: var(--card-bg);">
+                <span style="font-weight: 800; min-width: 44px; color: var(--text-main); font-size: 13px;">#${rankNum}${trophy ? ' ' + trophy : ''}</span>
+                <span style="font-weight: 600; color: var(--primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  ${escapeHTML(capitalizeName(c.name))}
+                </span>
+                <span style="font-weight: 600; color: var(--text-muted); font-size: 12px;">${c.points} pts</span>
+              </div>
+            `;
+          }).join('');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load home leaderboard:', err);
+        leaderboardList.innerHTML = '<div style="font-size: 11px; color: var(--danger); text-align: center; padding: 10px 0;">Failed to load rankings</div>';
+      });
+  }
+
+  // Load and render public stats (total resources count & average review rating)
+  const statResourcesEl = document.getElementById('stat-resources-count');
+  const statRatingEl = document.getElementById('stat-average-rating');
+  if (statResourcesEl && statRatingEl) {
+    api.getPublicStats()
+      .then(stats => {
+        const count = stats.totalResources || 0;
+        const roundedCount = Math.floor(count / 10) * 10;
+        
+        // Count Up Animation
+        if (roundedCount <= 0) {
+          statResourcesEl.textContent = '0+';
+        } else {
+          const duration = 1200; // 1.2 seconds duration
+          const startTime = performance.now();
+          
+          const animateCount = (now) => {
+            const progress = Math.min((now - startTime) / duration, 1);
+            // easeOutQuad curve for smooth deceleration
+            const easeProgress = progress * (2 - progress);
+            const current = Math.floor(easeProgress * roundedCount);
+            statResourcesEl.textContent = `${current}+`;
+            
+            if (progress < 1) {
+              requestAnimationFrame(animateCount);
+            } else {
+              statResourcesEl.textContent = `${roundedCount}+`;
+            }
+          };
+          requestAnimationFrame(animateCount);
+        }
+        
+        const rating = stats.averageRating || 4.8;
+        statRatingEl.textContent = rating.toFixed(1);
+      })
+      .catch(err => {
+        console.error('Failed to load public stats:', err);
+        statResourcesEl.textContent = '150+';
+        statRatingEl.textContent = '4.8';
+      });
+  }
+
+  container.innerHTML = getAnnouncementsSkeleton();
+
+  try {
+    const list = await api.getAnnouncements();
+    if (list.length === 0) {
+      container.innerHTML = `<div class="empty-state">No announcements posted yet. Check back later!</div>`;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="announcements-container sh-reveal-stagger in-view">
+        ${list.map((ann, idx) => {
+          const delayStyle = `animation-delay: ${idx * 0.08}s;`;
+          const cardStyle = ann.docUrl ? `style="cursor: pointer; border-left: 4px solid var(--primary); ${delayStyle}"` : `style="${delayStyle}"`;
+          const cardClick = ann.docUrl ? `onclick="window.open('${ann.docUrl}', '_blank')"` : '';
+          return `
+            <div class="announcement-card" ${cardStyle} ${cardClick}>
+              <h4 style="display: flex; align-items: center; gap: 8px;">
+                ${escapeHTML(ann.title)}
+                ${ann.docUrl ? `<span style="font-size: 10px; background-color: var(--primary-accent); color: var(--primary-dark); padding: 2px 8px; border-radius: 12px; font-weight: 700; text-transform: uppercase;">Doc Link</span>` : ''}
+              </h4>
+              <span class="announcement-date">
+                <i data-lucide="calendar" style="width: 12px; height: 12px; display: inline-block; margin-right: 4px; vertical-align: middle;"></i>
+                ${new Date(ann.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+              </span>
+              <p class="announcement-content">${escapeHTML(ann.content).replace(/\n/g, '<br>')}</p>
+              ${ann.docUrl ? `
+                <div style="margin-top: 10px; font-size: 13px; color: var(--primary); font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                  <i data-lucide="external-link" style="width: 14px; height: 14px;"></i> Open Associated Link
+                </div>
+              ` : ''}
+              ${currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin' || currentUser.role === 'educator') ? `
+                <button class="announcement-delete btn-delete-ann" data-id="${ann.id}" title="Delete Announcement" onclick="event.stopPropagation();">
+                  <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                </button>
+              ` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    // Attach deletion handlers
+    document.querySelectorAll('.btn-delete-ann').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = btn.getAttribute('data-id');
+        if (!confirm('Delete this announcement?')) return;
+        const originalHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i>';
+        refreshIcons();
+        try {
+          await api.deleteAnnouncement(id);
+          await renderHomeView();
+        } catch (err) {
+          alert(err.message || 'Failed to delete announcement');
+          btn.disabled = false;
+          btn.innerHTML = originalHTML;
+          refreshIcons();
+        }
+      });
+    });
+
+  } catch (err) {
+    container.innerHTML = `<div class="empty-state" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.2)">Error loading announcements.</div>`;
+  }
+  refreshIcons();
+  initHomeScrollAnimations();
+}
+
+// HOMEPAGE SCROLL ANIMATIONS (IntersectionObserver Engine)
+// ---------------------------------------------------------
+let homeScrollObserver = null;
+
+function initHomeScrollAnimations() {
+  const elements = document.querySelectorAll('#view-home .sh-reveal, #view-home .sh-reveal-left, #view-home .sh-reveal-right, #view-home .sh-reveal-scale, #view-home .sh-reveal-stagger');
+  if (!elements || elements.length === 0) return;
+
+  if (homeScrollObserver) {
+    homeScrollObserver.disconnect();
+    homeScrollObserver = null;
+  }
+
+  if (!('IntersectionObserver' in window)) {
+    elements.forEach(el => el.classList.add('in-view'));
+    return;
+  }
+
+  homeScrollObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('in-view');
+        homeScrollObserver.unobserve(entry.target);
+      }
+    });
+  }, {
+    root: null,
+    rootMargin: '0px 0px -40px 0px',
+    threshold: 0.06
+  });
+
+  elements.forEach(el => {
+    const rect = el.getBoundingClientRect();
+    if (rect.top < window.innerHeight - 40 && rect.bottom > 0) {
+      el.classList.add('in-view');
+    } else {
+      homeScrollObserver.observe(el);
+    }
+  });
+}
+
+function initScrollProgressBar() {
+  const bar = document.getElementById('scroll-progress-bar');
+  if (!bar) return;
+
+  const updateProgress = () => {
+    const doc = document.documentElement;
+    const scrollY = window.scrollY || doc.scrollTop || 0;
+    const maxScroll = doc.scrollHeight - doc.clientHeight;
+    if (maxScroll <= 0) {
+      bar.style.width = '0%';
+      return;
+    }
+    const percent = Math.min(100, Math.max(0, (scrollY / maxScroll) * 100));
+    bar.style.width = `${percent}%`;
+  };
+
+  window.addEventListener('scroll', updateProgress, { passive: true });
+  updateProgress();
+}
+
+// 2. NOTES VIEW
+async function renderNotesView() {
+  localStorage.setItem('notesFolderStack', JSON.stringify(notesFolderStack));
+  const breadcrumbs = document.getElementById('notes-breadcrumbs');
+  const actions = document.getElementById('notes-header-actions');
+  const content = document.getElementById('notes-content-container');
+
+  const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin');
+  const isStaff = currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin' || currentUser.role === 'educator');
+  const currentFolder = getCurrentNotesFolder();
+
+  // 1. Build breadcrumbs from stack
+  let crumbsHTML = `<span class="breadcrumb-item ${notesFolderStack.length === 0 ? 'breadcrumb-active' : ''}" id="notes-root-crumb">Subject Notes</span>`;
+  notesFolderStack.forEach((f, idx) => {
+    const isLast = idx === notesFolderStack.length - 1;
+    crumbsHTML += `
+      <i data-lucide="chevron-right" class="breadcrumb-separator" style="width: 16px; height: 16px;"></i>
+      <span class="breadcrumb-item ${isLast ? 'breadcrumb-active' : ''} notes-crumb-item" data-idx="${idx}" style="${!isLast ? 'cursor:pointer;' : ''}">${escapeHTML(f.name)}</span>
+    `;
+  });
+  breadcrumbs.innerHTML = crumbsHTML;
+
+  // Breadcrumb click handlers
+  const rootCrumb = document.getElementById('notes-root-crumb');
+  if (rootCrumb && notesFolderStack.length > 0) {
+    rootCrumb.style.cursor = 'pointer';
+    rootCrumb.addEventListener('click', () => { notesFolderStack = []; renderNotesView(); });
+  }
+  document.querySelectorAll('.notes-crumb-item').forEach(crumb => {
+    const idx = parseInt(crumb.getAttribute('data-idx'));
+    if (idx < notesFolderStack.length - 1) {
+      crumb.addEventListener('click', () => {
+        notesFolderStack = notesFolderStack.slice(0, idx + 1);
+        renderNotesView();
+      });
+    }
+  });
+
+  // 2. Action buttons
+  if (notesFolderStack.length === 0) {
+    actions.innerHTML = isAdmin ? `
+      <button class="btn btn-primary" id="btn-add-notes-folder" style="display: flex; align-items: center; gap: 6px;">
+        <i data-lucide="folder-plus" style="width: 18px; height: 18px;"></i> Add Year Folder
+      </button>
+    ` : '';
+    if (isAdmin) {
+      document.getElementById('btn-add-notes-folder').addEventListener('click', () => {
+        openFolderModal('notes', '', '', null);
+      });
+    }
+  } else {
+    actions.innerHTML = `
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="btn btn-secondary" id="btn-notes-back">
+          <i data-lucide="arrow-left" style="width: 18px; height: 18px;"></i> Back
+        </button>
+        ${isAdmin ? `
+          <button class="btn btn-secondary" id="btn-add-notes-subfolder" style="display: flex; align-items: center; gap: 6px;">
+            <i data-lucide="folder-plus" style="width: 18px; height: 18px;"></i> New Folder
+          </button>
+        ` : ''}
+        ${isStaff ? `
+          <button class="btn btn-primary" id="btn-notes-upload" style="display: flex; align-items: center; gap: 6px;">
+            <i data-lucide="upload" style="width: 18px; height: 18px;"></i> Upload Note (PDF)
+          </button>
+        ` : (currentUser && currentUser.role === 'student' ? `
+          <button class="btn btn-primary" id="btn-notes-contribute-folder" style="display: flex; align-items: center; gap: 6px;">
+            <i data-lucide="plus" style="width: 18px; height: 18px;"></i> Contribute
+          </button>
+        ` : '')}
+      </div>
+    `;
+
+    document.getElementById('btn-notes-back').addEventListener('click', () => {
+      notesFolderStack = notesFolderStack.slice(0, -1);
+      renderNotesView();
+    });
+
+    if (isAdmin) {
+      const addSubfolderBtn = document.getElementById('btn-add-notes-subfolder');
+      if (addSubfolderBtn) {
+        addSubfolderBtn.addEventListener('click', () => {
+          openFolderModal('notes', '', '', currentFolder.id);
+        });
+      }
+    }
+    if (isStaff) {
+      const uploadBtn = document.getElementById('btn-notes-upload');
+      if (uploadBtn) uploadBtn.addEventListener('click', () => openUploadModal('notes', currentFolder.id, currentFolder.name));
+    }
+    const notesContributeBtn = document.getElementById('btn-notes-contribute-folder');
+    if (notesContributeBtn) {
+      notesContributeBtn.addEventListener('click', () => {
+        if (window.openContributeModal) window.openContributeModal('notes', currentFolder.id);
+      });
+    }
+  }
+
+  // 3. Render content body
+  const parentId = currentFolder ? currentFolder.id : null;
+  content.innerHTML = getGridSkeleton();
+
+  try {
+    const [subFolders, docs] = await Promise.all([
+      api.getFolders('notes', parentId),
+      parentId ? api.getDocuments('notes', parentId) : Promise.resolve([])
+    ]);
+
+    const hasSubFolders = subFolders.length > 0;
+    const hasDocs = docs.length > 0;
+
+    if (!hasSubFolders && !hasDocs && !parentId) {
+      content.innerHTML = `
+        <div class="empty-state">
+          <i data-lucide="info" style="width: 30px; height: 30px; margin-bottom: 10px; color: var(--primary-light);"></i>
+          <p>No year folders created yet.</p>
+          ${isAdmin ? '<p style="font-size: 14px; margin-top: 6px;">Click "Add Year Folder" to get started.</p>' : ''}
+        </div>
+      `;
+      refreshIcons();
+      return;
+    }
+
+    let html = '';
+
+    if (hasSubFolders) {
+      const levelLabel = notesFolderStack.length === 0 ? 'Year' : (notesFolderStack.length === 1 ? 'Branch' : (notesFolderStack.length === 2 ? 'Subject' : 'Sub-folder'));
+      html += `
+        <div style="margin-bottom: ${hasDocs ? '28px' : '0'};">
+          ${parentId ? `<h4 style="color: var(--text-muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px;">${levelLabel} Folders</h4>` : ''}
+          <div class="folders-grid">
+            ${subFolders.map(f => `
+              <div class="folder-item notes-folder-card" data-id="${f.id}" data-name="${f.name}">
+                ${getFolderIconSvg('#4a82c3', '#1e56a0')}
+                <span class="folder-name">${escapeHTML(f.name)}</span>
+                ${isAdmin ? `
+                  <div class="more-options-container" style="position: absolute; top: 12px; right: 12px; display: inline-block;">
+<button class="btn btn-secondary btn-sm btn-more-options" data-id="${f.id}" style="padding: 6px;"><i data-lucide="more-vertical" style="width: 14px; height: 14px;"></i></button>
+<div class="more-options-dropdown" id="dropdown-${f.id}">
+<button class="dropdown-item btn-rename-notes-folder" data-id="${f.id}" data-name="${f.name}"><i data-lucide="edit-2" style="width: 14px; height: 14px;"></i><span>Edit</span></button>
+<button class="dropdown-item btn-move-folder" data-id="${f.id}" data-name="${f.name}"><i data-lucide="folder-sync" style="width: 14px; height: 14px;"></i><span>Shift</span></button>
+<button class="dropdown-item btn-delete-notes-folder" data-id="${f.id}"><i data-lucide="trash-2" style="width: 14px; height: 14px; color: var(--danger);"></i><span style="color: var(--danger);">Delete</span></button>
+</div></div>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    if (hasDocs) {
+      html += `
+        ${hasSubFolders ? '<h4 style="color: var(--text-muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px;">Notes</h4>' : ''}
+        <div class="docs-list">
+          ${docs.map(doc => `
+            <div class="doc-card" style="position: relative;">
+              <button class="btn-like-doc like-heart-btn ${doc.hasLiked ? 'liked' : ''}" data-id="${doc.id}" title="${doc.hasLiked ? 'Unlike' : 'Like'} this resource" style="position: absolute; top: 12px; right: 12px; display: flex; align-items: center; gap: 4px; background: none; border: none; cursor: pointer; color: ${doc.hasLiked ? 'var(--danger)' : 'var(--text-muted)'}; transition: transform 0.2s ease;">
+                <i data-lucide="heart" style="width: 16px; height: 16px; fill: ${doc.hasLiked ? 'var(--danger)' : 'none'}; stroke: ${doc.hasLiked ? 'var(--danger)' : 'currentColor'};"></i>
+                <span class="like-count" style="font-size: 12px; font-weight: 700;">${doc.likesCount || 0}</span>
+              </button>
+              <div class="doc-info">
+                <div class="doc-icon-container"><i data-lucide="file-text" style="width: 20px; height: 20px;"></i></div>
+                <div class="doc-meta">
+                  <h5 style="display: flex; align-items: center; gap: 6px;">
+                    ${doc.isPinned ? `<i data-lucide="pin" style="width: 14px; height: 14px; fill: var(--warning); color: var(--warning); flex-shrink: 0;" title="Pinned Document"></i>` : ''}
+                    ${escapeHTML(doc.title)}
+                  </h5>
+                  <div class="doc-meta-details">
+                    <span>Academic Year: ${escapeHTML(doc.year)}</span><span>&bull;</span>
+                    <span>${doc.uploadedByRole === 'student' ? 'Contributed By' : 'By'}: ${escapeHTML(doc.uploadedBy)}</span><span>&bull;</span>
+                    <span>${new Date(doc.createdAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="doc-actions" style="position: relative;">
+                <button onclick="openDocumentViewer('${doc.id}', '${escapeHTML(doc.fileName)}', '${doc.type}')" class="btn btn-primary btn-sm" style="padding: 8px 12px;"><i data-lucide="eye" style="width: 14px; height: 14px;"></i> View</button>
+                <div class="more-options-container" style="position: relative; display: inline-block;">
+                  <button class="btn btn-secondary btn-sm btn-more-options" data-id="${doc.id}" style="padding: 8px;" title="More Options"><i data-lucide="more-vertical" style="width: 14px; height: 14px;"></i></button>
+                  <div class="more-options-dropdown" id="dropdown-${doc.id}">
+                    ${isStaff ? `<button class="dropdown-item btn-pin-doc" data-id="${doc.id}"><i data-lucide="pin" style="width: 14px; height: 14px; ${doc.isPinned ? 'fill: var(--warning); color: var(--warning);' : ''}"></i><span>${doc.isPinned ? 'Unpin' : 'Pin'}</span></button>` : ''}
+                    ${(currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) ? `<button class="dropdown-item btn-move-doc" data-id="${doc.id}" data-title="${escapeHTML(doc.title)}"><i data-lucide="folder-sync" style="width: 14px; height: 14px;"></i><span>Shift</span></button>` : ''}
+                    ${canManageDocument(doc) ? `<button class="dropdown-item btn-delete-doc" data-id="${doc.id}"><i data-lucide="trash-2" style="width: 14px; height: 14px; color: var(--danger);"></i><span style="color: var(--danger);">Delete</span></button>` : ''}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    if (!hasSubFolders && !hasDocs && parentId) {
+      html = `
+        <div class="empty-state">
+          <i data-lucide="file-text" style="width: 30px; height: 30px; margin-bottom: 10px; color: var(--text-muted);"></i>
+          <p>This folder is empty.</p>
+          ${isAdmin ? '<p style="font-size: 14px; margin-top: 6px;">Add a sub-folder or upload a note using the buttons above.</p>' : (isStaff ? '<p style="font-size: 14px; margin-top: 6px;">Click "Upload Note" to add the first PDF.</p>' : '')}
+        </div>
+      `;
+    }
+
+    content.innerHTML = html;
+
+    document.querySelectorAll('.notes-folder-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.more-options-container')) return;
+        notesFolderStack.push({ id: card.getAttribute('data-id'), name: card.getAttribute('data-name') });
+        renderNotesView();
+      });
+    });
+
+    if (isAdmin) {
+      document.querySelectorAll('.btn-rename-notes-folder').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openFolderModal('notes', btn.getAttribute('data-id'), btn.getAttribute('data-name'), null);
+        });
+      });
+      document.querySelectorAll('.btn-delete-notes-folder').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const id = btn.getAttribute('data-id');
+          if (!confirm('Delete this folder and all its contents?')) return;
+          const originalHTML = btn.innerHTML;
+          btn.disabled = true; btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 10px; height: 10px;"></i>'; refreshIcons();
+          try {
+            await api.deleteFolder(id); await renderNotesView();
+          } catch (err) {
+            alert(err.message || 'Failed to delete folder');
+            btn.disabled = false; btn.innerHTML = originalHTML; refreshIcons();
+          }
+        });
+      });
+    }
+
+    document.querySelectorAll('.btn-delete-doc').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        if (!confirm('Delete this note document?')) return;
+        const originalHTML = btn.innerHTML;
+        btn.disabled = true; btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i>'; refreshIcons();
+        try {
+          await api.deleteDocument(id); const cardToRemove = btn.closest('.doc-card'); if(cardToRemove) { cardToRemove.style.transition = 'opacity 0.3s'; cardToRemove.style.opacity = '0'; setTimeout(() => cardToRemove.remove(), 300); }
+        } catch (err) {
+          alert(err.message || 'Failed to delete note');
+          btn.disabled = false; btn.innerHTML = originalHTML; refreshIcons();
+        }
+      });
+    });
+
+    document.querySelectorAll('.btn-like-doc').forEach(btn => {
+      btn.addEventListener('click', (e) => { handleLikeToggle(e, renderNotesView); });
+    });
+
+  } catch (err) {
+    content.innerHTML = `<div class="empty-state">Failed to load folder contents.</div>`;
+  }
+  refreshIcons();
+}
+
+function backToNotesFolders() {
+  notesFolderStack = notesFolderStack.slice(0, -1);
+  renderNotesView();
+}
+
+// 3. PAPERS VIEW
+let paperSearchQuery = '';
+
+async function renderPapersView() {
+  localStorage.setItem('papersFolderStack', JSON.stringify(papersFolderStack));
+  const breadcrumbs = document.getElementById('papers-breadcrumbs');
+  const actions = document.getElementById('papers-header-actions');
+  const content = document.getElementById('papers-content-container');
+
+  const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin');
+  const isStaff = currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin' || currentUser.role === 'educator');
+  const currentFolder = getCurrentPapersFolder();
+
+  let crumbsHTML = `<span class="breadcrumb-item ${papersFolderStack.length === 0 ? 'breadcrumb-active' : ''}" id="papers-root-crumb">Papers (PYQs)</span>`;
+  papersFolderStack.forEach((f, idx) => {
+    const isLast = idx === papersFolderStack.length - 1;
+    crumbsHTML += `<i data-lucide="chevron-right" class="breadcrumb-separator" style="width: 16px; height: 16px;"></i><span class="breadcrumb-item ${isLast ? 'breadcrumb-active' : ''} papers-crumb-item" data-idx="${idx}" style="${!isLast ? 'cursor:pointer;' : ''}">${escapeHTML(f.name)}</span>`;
+  });
+  breadcrumbs.innerHTML = crumbsHTML;
+
+  const rootCrumb = document.getElementById('papers-root-crumb');
+  if (rootCrumb && papersFolderStack.length > 0) { rootCrumb.style.cursor = 'pointer'; rootCrumb.addEventListener('click', () => { papersFolderStack = []; paperSearchQuery = ''; renderPapersView(); }); }
+  document.querySelectorAll('.papers-crumb-item').forEach(crumb => {
+    const idx = parseInt(crumb.getAttribute('data-idx'));
+    if (idx < papersFolderStack.length - 1) { crumb.addEventListener('click', () => { papersFolderStack = papersFolderStack.slice(0, idx + 1); paperSearchQuery = ''; renderPapersView(); }); }
+  });
+
+  if (papersFolderStack.length === 0) {
+    actions.innerHTML = isAdmin ? `<button class="btn btn-primary" id="btn-add-papers-folder" style="display: flex; align-items: center; gap: 6px;"><i data-lucide="folder-plus" style="width: 18px; height: 18px;"></i> Add Year Folder</button>` : '';
+    if (isAdmin) document.getElementById('btn-add-papers-folder').addEventListener('click', () => openFolderModal('papers', '', '', null));
+  } else {
+    actions.innerHTML = `
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="btn btn-secondary" id="btn-papers-back"><i data-lucide="arrow-left" style="width: 18px; height: 18px;"></i> Back</button>
+        ${isAdmin ? `<button class="btn btn-secondary" id="btn-add-papers-subfolder" style="display: flex; align-items: center; gap: 6px;"><i data-lucide="folder-plus" style="width: 18px; height: 18px;"></i> New Folder</button>` : ''}
+        ${isStaff ? `<button class="btn btn-primary" id="btn-papers-upload" style="display: flex; align-items: center; gap: 6px;"><i data-lucide="upload" style="width: 18px; height: 18px;"></i> Upload PYQ (PDF)</button>` : (currentUser && currentUser.role === 'student' ? `<button class="btn btn-primary" id="btn-papers-contribute-folder" style="display: flex; align-items: center; gap: 6px;"><i data-lucide="plus" style="width: 18px; height: 18px;"></i> Contribute</button>` : '')}
+      </div>`;
+    document.getElementById('btn-papers-back').addEventListener('click', () => { papersFolderStack = papersFolderStack.slice(0, -1); paperSearchQuery = ''; renderPapersView(); });
+    if (isAdmin) { const b = document.getElementById('btn-add-papers-subfolder'); if (b) b.addEventListener('click', () => openFolderModal('papers', '', '', currentFolder.id)); }
+    if (isStaff) { const b = document.getElementById('btn-papers-upload'); if (b) b.addEventListener('click', () => openUploadModal('paper', currentFolder.id, currentFolder.name)); }
+    const pb = document.getElementById('btn-papers-contribute-folder');
+    if (pb) pb.addEventListener('click', () => { if (window.openContributeModal) window.openContributeModal('papers', currentFolder.id); });
+  }
+
+  const parentId = currentFolder ? currentFolder.id : null;
+  content.innerHTML = getGridSkeleton();
+
+  try {
+    const [subFolders, docs] = await Promise.all([
+      api.getFolders('papers', parentId),
+      parentId ? api.getDocuments('paper', parentId) : Promise.resolve([])
+    ]);
+    const hasSubFolders = subFolders.length > 0;
+    const hasDocs = docs.length > 0;
+
+    if (!hasSubFolders && !hasDocs && !parentId) {
+      content.innerHTML = `<div class="empty-state"><i data-lucide="info" style="width: 30px; height: 30px; margin-bottom: 10px; color: var(--primary-light);"></i><p>No year folders created yet.</p>${isAdmin ? '<p style="font-size: 14px; margin-top: 6px;">Click &quot;Add Year Folder&quot; to get started.</p>' : ''}</div>`;
+      refreshIcons(); return;
+    }
+
+    let html = '';
+    if (hasSubFolders) {
+      const levelLabel = papersFolderStack.length === 0 ? 'Year' : (papersFolderStack.length === 1 ? 'Branch' : (papersFolderStack.length === 2 ? 'Subject' : 'Sub-folder'));
+      html += `<div style="margin-bottom: ${hasDocs ? '28px' : '0'};">${parentId ? `<h4 style="color: var(--text-muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px;">${levelLabel} Folders</h4>` : ''}<div class="folders-grid">${subFolders.map(f => `<div class="folder-item papers-folder-card" data-id="${f.id}" data-name="${f.name}">${getFolderIconSvg('#0284c7', '#0369a1')}<span class="folder-name">${escapeHTML(f.name)}</span>${isAdmin ? `<div class="more-options-container" style="position: absolute; top: 12px; right: 12px; display: inline-block;">
+<button class="btn btn-secondary btn-sm btn-more-options" data-id="${f.id}" style="padding: 6px;"><i data-lucide="more-vertical" style="width: 14px; height: 14px;"></i></button>
+<div class="more-options-dropdown" id="dropdown-${f.id}">
+<button class="dropdown-item btn-rename-papers-folder" data-id="${f.id}" data-name="${f.name}"><i data-lucide="edit-2" style="width: 14px; height: 14px;"></i><span>Edit</span></button>
+<button class="dropdown-item btn-move-folder" data-id="${f.id}" data-name="${f.name}"><i data-lucide="folder-sync" style="width: 14px; height: 14px;"></i><span>Shift</span></button>
+<button class="dropdown-item btn-delete-papers-folder" data-id="${f.id}"><i data-lucide="trash-2" style="width: 14px; height: 14px; color: var(--danger);"></i><span style="color: var(--danger);">Delete</span></button>
+</div></div>` : ''}</div>`).join('')}</div></div>`;
+    }
+    if (hasDocs) {
+      const getFiltered = () => !paperSearchQuery.trim() ? docs : docs.filter(d => ((d.title||'').toLowerCase().includes(paperSearchQuery.toLowerCase()) || (d.year||'').toLowerCase().includes(paperSearchQuery.toLowerCase())));
+      const filtered = getFiltered();
+      html += `${hasSubFolders ? '<h4 style="color: var(--text-muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px;">Papers (PYQs)</h4>' : ''}<div class="search-input-wrapper" style="max-width: 300px; margin-bottom: 20px;"><i data-lucide="search" class="search-input-icon" style="width: 16px; height: 16px;"></i><input type="text" id="input-paper-search" class="form-input search-input" placeholder="Search by paper name/year..." value="${escapeHTML(paperSearchQuery)}" style="padding: 8px 12px 8px 36px; font-size: 14px;" /></div>${filtered.length === 0 && paperSearchQuery ? `<div class="empty-state"><p>No papers match "${escapeHTML(paperSearchQuery)}"</p></div>` : ''}<div class="docs-list">${filtered.map(doc => `<div class="doc-card" style="position: relative; border-left: 4px solid #0284c7;"><button class="btn-like-doc like-heart-btn ${doc.hasLiked ? 'liked' : ''}" data-id="${doc.id}" style="position: absolute; top: 12px; right: 12px; display: flex; align-items: center; gap: 4px; background: none; border: none; cursor: pointer; color: ${doc.hasLiked ? 'var(--danger)' : 'var(--text-muted)'}; transition: transform 0.2s ease;"><i data-lucide="heart" style="width: 16px; height: 16px; fill: ${doc.hasLiked ? 'var(--danger)' : 'none'}; stroke: ${doc.hasLiked ? 'var(--danger)' : 'currentColor'};"></i><span class="like-count" style="font-size: 12px; font-weight: 700;">${doc.likesCount || 0}</span></button><div class="doc-info"><div class="doc-icon-container" style="background-color: #e0f2fe; color: #0284c7;"><i data-lucide="file-text" style="width: 20px; height: 20px;"></i></div><div class="doc-meta"><h5 style="display: flex; align-items: center; gap: 6px;">${doc.isPinned ? '<i data-lucide="pin" style="width: 14px; height: 14px; fill: var(--warning); color: var(--warning); flex-shrink: 0;" title="Pinned Document"></i>' : ''}${escapeHTML(doc.title)}</h5><div class="doc-meta-details"><span>Academic Year: ${escapeHTML(doc.year)}</span><span>&bull;</span><span>${doc.uploadedByRole === 'student' ? 'Contributed By' : 'By'}: ${escapeHTML(doc.uploadedBy)}</span><span>&bull;</span><span>${new Date(doc.createdAt).toLocaleDateString()}</span></div></div></div><div class="doc-actions" style="position: relative;"><button onclick="openDocumentViewer('${doc.id}', '${escapeHTML(doc.fileName)}', '${doc.type}')" class="btn btn-primary btn-sm" style="padding: 8px 12px;"><i data-lucide="eye" style="width: 14px; height: 14px;"></i> View</button><div class="more-options-container" style="position: relative; display: inline-block;"><button class="btn btn-secondary btn-sm btn-more-options" data-id="${doc.id}" style="padding: 8px;"><i data-lucide="more-vertical" style="width: 14px; height: 14px;"></i></button><div class="more-options-dropdown" id="dropdown-${doc.id}">${isStaff ? `<button class="dropdown-item btn-pin-doc" data-id="${doc.id}"><i data-lucide="pin" style="width: 14px; height: 14px; ${doc.isPinned ? 'fill: var(--warning); color: var(--warning);' : ''}"></i><span>${doc.isPinned ? 'Unpin' : 'Pin'}</span></button>` : ''}${(currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) ? `<button class="dropdown-item btn-move-doc" data-id="${doc.id}" data-title="${escapeHTML(doc.title)}"><i data-lucide="folder-sync" style="width: 14px; height: 14px;"></i><span>Shift</span></button>` : ''}${canManageDocument(doc) ? `<button class="dropdown-item btn-edit-uploaded-doc" data-id="${doc.id}" data-title="${escapeHTML(doc.title)}" data-subject="${escapeHTML(doc.subject || '')}" data-year="${escapeHTML(doc.year || '')}"><i data-lucide="edit-3" style="width: 14px; height: 14px;"></i><span>Edit</span></button>` : ''}${canManageDocument(doc) ? `<button class="dropdown-item btn-delete-papers-doc" data-id="${doc.id}"><i data-lucide="trash-2" style="width: 14px; height: 14px; color: var(--danger);"></i><span style="color: var(--danger);">Delete</span></button>` : ''}</div></div></div></div>`).join('')}</div>`;
+    }
+    if (!hasSubFolders && !hasDocs && parentId) {
+      html = `<div class="empty-state"><i data-lucide="file-text" style="width: 30px; height: 30px; margin-bottom: 10px; color: var(--text-muted);"></i><p>This folder is empty.</p>${isAdmin ? '<p style="font-size: 14px; margin-top: 6px;">Add a sub-folder or upload a PYQ using the buttons above.</p>' : (isStaff ? '<p style="font-size: 14px; margin-top: 6px;">Click &quot;Upload PYQ&quot; to add the first PDF.</p>' : '')}</div>`;
+    }
+    content.innerHTML = html;
+
+    const si = document.getElementById('input-paper-search');
+    if (si) si.addEventListener('input', (e) => { paperSearchQuery = e.target.value; renderPapersView(); });
+
+    document.querySelectorAll('.papers-folder-card').forEach(card => {
+      card.addEventListener('click', (e) => { if (e.target.closest('.more-options-container')) return; papersFolderStack.push({ id: card.getAttribute('data-id'), name: card.getAttribute('data-name') }); paperSearchQuery = ''; renderPapersView(); });
+    });
+    if (isAdmin) {
+      document.querySelectorAll('.btn-rename-papers-folder').forEach(btn => { btn.addEventListener('click', (e) => { e.stopPropagation(); openFolderModal('papers', btn.getAttribute('data-id'), btn.getAttribute('data-name'), null); }); });
+      document.querySelectorAll('.btn-delete-papers-folder').forEach(btn => {
+        btn.addEventListener('click', async (e) => { e.stopPropagation(); const id = btn.getAttribute('data-id'); if (!confirm('Delete this folder and all its contents?')) return; const oh = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 10px; height: 10px;"></i>'; refreshIcons(); try { await api.deleteFolder(id); await renderPapersView(); } catch (err) { alert(err.message || 'Failed to delete'); btn.disabled = false; btn.innerHTML = oh; refreshIcons(); } });
+      });
+    }
+    document.querySelectorAll('.btn-delete-papers-doc').forEach(btn => {
+      btn.addEventListener('click', async () => { const id = btn.getAttribute('data-id'); if (!confirm('Delete this paper?')) return; const oh = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i>'; refreshIcons(); try { await api.deleteDocument(id); const c = btn.closest('.doc-card'); if(c) { c.style.transition = 'opacity 0.3s'; c.style.opacity = '0'; setTimeout(() => c.remove(), 300); } } catch (err) { alert(err.message || 'Failed to delete'); btn.disabled = false; btn.innerHTML = oh; refreshIcons(); } });
+    });
+    document.querySelectorAll('.btn-like-doc').forEach(btn => { btn.addEventListener('click', (e) => { handleLikeToggle(e, renderPapersView); }); });
+
+  } catch (err) {
+    content.innerHTML = `<div class="empty-state">Failed to load folder contents.</div>`;
+  }
+  refreshIcons();
+}
+
+function backToPapersFolders() {
+  papersFolderStack = papersFolderStack.slice(0, -1);
+  paperSearchQuery = '';
+  renderPapersView();
+}
+
+// 4. RESOURCES VIEW
+async function renderResourcesView() {
+  localStorage.setItem('currentResourcesSection', currentResourcesSection);
+  localStorage.setItem('currentResourcesFolder', JSON.stringify(currentResourcesFolder));
+  localStorage.setItem('roadmapFolderStack', JSON.stringify(roadmapFolderStack));
+  localStorage.setItem('labManualsFolderStack', JSON.stringify(labManualsFolderStack));
+  const breadcrumbs = document.getElementById('resources-breadcrumbs');
+  const actions = document.getElementById('resources-header-actions');
+  const content = document.getElementById('resources-content-container');
+
+  const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin');
+  const isStaff = currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin' || currentUser.role === 'educator');
+
+  // Breadcrumbs & Actions
+  let crumbsHTML = `<span class="breadcrumb-item ${currentResourcesSection === 'root' ? 'breadcrumb-active' : ''}" id="crumb-resources-root">Resources</span>`;
+  let actionsHTML = '';
+
+  const isStaffOrEducator = currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin' || currentUser.role === 'educator');
+
+  if (currentResourcesSection !== 'root') {
+    if (currentResourcesSection === 'simulations' || currentResourcesSection === 'roadmaps') {
+      crumbsHTML += `
+        <i data-lucide="chevron-right" class="breadcrumb-separator" style="width: 16px; height: 16px;"></i>
+        <span class="breadcrumb-item ${!currentResourcesFolder ? 'breadcrumb-active' : ''}" id="crumb-resources-section">Simulations</span>
+      `;
+      simulationFolderStack.forEach((folder, idx) => {
+        const isLast = idx === simulationFolderStack.length - 1;
+        crumbsHTML += `
+          <i data-lucide="chevron-right" class="breadcrumb-separator" style="width: 16px; height: 16px;"></i>
+          <span class="breadcrumb-item ${isLast ? 'breadcrumb-active' : ''} simulation-crumb-item" data-idx="${idx}" style="cursor: pointer;">
+            ${escapeHTML(folder.name)}
+          </span>
+        `;
+      });
+    } else {
+      // For lab_manuals / books / competitive: use labManualsFolderStack for multi-level breadcrumbs
+      const isLabSection = currentResourcesSection === 'lab_manuals' || currentResourcesSection === 'books' || currentResourcesSection === 'competitive';
+      const sectionLabel = currentResourcesSection === 'syllabus' ? 'Syllabus' : (currentResourcesSection.startsWith('lab_manuals') ? 'Lab Manuals' : (currentResourcesSection.startsWith('books') ? 'Books' : (currentResourcesSection.startsWith('competitive') ? 'Competitive Exam PYQs' : (currentResourcesSection === 'calculator' ? 'SGPA & CGPA Calculator' : ''))));
+      crumbsHTML += `
+        <i data-lucide="chevron-right" class="breadcrumb-separator" style="width: 16px; height: 16px;"></i>
+        <span class="breadcrumb-item ${labManualsFolderStack.length === 0 ? 'breadcrumb-active' : ''}" id="crumb-resources-section" style="${labManualsFolderStack.length > 0 ? 'cursor:pointer;' : ''}">${sectionLabel}</span>
+      `;
+      labManualsFolderStack.forEach((folder, idx) => {
+        const isLast = idx === labManualsFolderStack.length - 1;
+        crumbsHTML += `
+          <i data-lucide="chevron-right" class="breadcrumb-separator" style="width: 16px; height: 16px;"></i>
+          <span class="breadcrumb-item ${isLast ? 'breadcrumb-active' : ''} res-lab-crumb-item" data-idx="${idx}" style="${!isLast ? 'cursor:pointer;' : ''}">${escapeHTML(folder.name)}</span>
+        `;
+      });
+    }
+
+    // Header buttons
+    const isLabOrBooks = currentResourcesSection === 'lab_manuals' || currentResourcesSection === 'books' || currentResourcesSection === 'competitive';
+    const isInsideLabFolder = labManualsFolderStack.length > 0 && isLabOrBooks;
+    const currentLabFolder = labManualsFolderStack.length > 0 ? labManualsFolderStack[labManualsFolderStack.length - 1] : null;
+    actionsHTML = `
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="btn btn-secondary" id="btn-resources-back">
+          <i data-lucide="arrow-left" style="width: 18px; height: 18px;"></i> Back
+        </button>
+        ${(isAdmin && (isLabOrBooks)) || (isStaffOrEducator && (currentResourcesSection === 'simulations' || currentResourcesSection === 'roadmaps') && !currentResourcesFolder) ? `
+          <button class="btn btn-secondary" id="btn-resources-add-folder" style="display: flex; align-items: center; gap: 6px;">
+            <i data-lucide="folder-plus" style="width: 18px; height: 18px;"></i> ${isInsideLabFolder ? 'New Folder' : 'Add Year Folder'}
+          </button>
+        ` : ''}
+        ${(isStaff && (currentResourcesSection === 'syllabus' || (isLabOrBooks && isInsideLabFolder))) || (isStaffOrEducator && (currentResourcesSection === 'simulations' || currentResourcesSection === 'roadmaps') && currentResourcesFolder) ? `
+          <button class="btn btn-primary" id="btn-resources-upload" style="display: flex; align-items: center; gap: 6px;">
+            <i data-lucide="upload" style="width: 18px; height: 18px;"></i> Upload PDF
+          </button>
+        ` : (!isStaff && currentUser && currentUser.role === 'student' && (isInsideLabFolder || currentResourcesFolder || currentResourcesSection === 'syllabus') ? `
+          <button class="btn btn-primary" id="btn-resources-contribute-folder" style="display: flex; align-items: center; gap: 6px;">
+            <i data-lucide="plus" style="width: 18px; height: 18px;"></i> Contribute
+          </button>
+        ` : '')}
+      </div>
+    `;
+  }
+
+  breadcrumbs.innerHTML = crumbsHTML;
+  actions.innerHTML = actionsHTML;
+
+  // Crumb clicks
+  const crumbRoot = document.getElementById('crumb-resources-root');
+  if (crumbRoot) crumbRoot.addEventListener('click', () => { currentResourcesSection = 'root'; currentResourcesFolder = null; simulationFolderStack = []; roadmapFolderStack = []; labManualsFolderStack = []; renderResourcesView(); });
+
+  const crumbSection = document.getElementById('crumb-resources-section');
+  if (crumbSection) crumbSection.addEventListener('click', () => {
+    labManualsFolderStack = [];
+    currentResourcesFolder = null;
+    simulationFolderStack = [];
+    roadmapFolderStack = [];
+    renderResourcesView();
+  });
+
+  // Lab/Books/Competitive crumb items
+  document.querySelectorAll('.res-lab-crumb-item').forEach(crumb => {
+    crumb.addEventListener('click', () => {
+      const idx = parseInt(crumb.getAttribute('data-idx'));
+      if (idx < labManualsFolderStack.length - 1) {
+        labManualsFolderStack = labManualsFolderStack.slice(0, idx + 1);
+        renderResourcesView();
+      }
+    });
+  });
+
+  // Re-attach breadcrumbs stack handlers
+  document.querySelectorAll('.simulation-crumb-item, .roadmap-crumb-item').forEach(crumb => {
+    crumb.addEventListener('click', () => {
+      const idx = parseInt(crumb.getAttribute('data-idx'));
+      simulationFolderStack = simulationFolderStack.slice(0, idx + 1);
+      roadmapFolderStack = simulationFolderStack;
+      currentResourcesFolder = simulationFolderStack[simulationFolderStack.length - 1];
+      renderResourcesView();
+    });
+  });
+
+  const backBtn = document.getElementById('btn-resources-back');
+  if (backBtn) backBtn.addEventListener('click', handleResourcesBack);
+
+  const addFolderBtn = document.getElementById('btn-resources-add-folder');
+  if (addFolderBtn) {
+    const isLabSect = currentResourcesSection === 'lab_manuals' || currentResourcesSection === 'books' || currentResourcesSection === 'competitive';
+    const parentIdForNew = (isLabSect && labManualsFolderStack.length > 0) ? labManualsFolderStack[labManualsFolderStack.length - 1].id : null;
+    addFolderBtn.addEventListener('click', () => openFolderModal(currentResourcesSection, '', '', parentIdForNew));
+  }
+
+  const uploadBtn = document.getElementById('btn-resources-upload');
+  if (uploadBtn) {
+    uploadBtn.addEventListener('click', () => {
+      let docType = 'syllabus';
+      let folderId = null;
+      let folderName = '';
+      const currentLabFolder = labManualsFolderStack.length > 0 ? labManualsFolderStack[labManualsFolderStack.length - 1] : null;
+      if (currentResourcesSection === 'lab_manuals' && currentLabFolder) {
+        docType = 'lab_manual'; folderId = currentLabFolder.id; folderName = currentLabFolder.name;
+      } else if (currentResourcesSection === 'books' && currentLabFolder) {
+        docType = 'book'; folderId = currentLabFolder.id; folderName = currentLabFolder.name;
+      } else if (currentResourcesSection === 'competitive' && currentLabFolder) {
+        docType = 'competitive'; folderId = currentLabFolder.id; folderName = currentLabFolder.name;
+      } else if (currentResourcesSection === 'simulations' || currentResourcesSection === 'roadmaps') {
+        docType = 'simulation'; folderId = currentResourcesFolder ? currentResourcesFolder.id : null; folderName = currentResourcesFolder ? currentResourcesFolder.name : '';
+      }
+      openUploadModal(docType, folderId, folderName);
+    });
+  }
+
+  const resContributeBtn = document.getElementById('btn-resources-contribute-folder');
+  if (resContributeBtn) {
+    resContributeBtn.addEventListener('click', () => {
+      let cat = 'lab_manuals';
+      if (currentResourcesSection.startsWith('books')) cat = 'books';
+      else if (currentResourcesSection.startsWith('simulations') || currentResourcesSection.startsWith('roadmaps')) cat = 'simulations';
+      else if (currentResourcesSection.startsWith('competitive')) cat = 'competitive';
+      else if (currentResourcesSection === 'syllabus') cat = 'syllabus';
+      const currentLabFolder = labManualsFolderStack.length > 0 ? labManualsFolderStack[labManualsFolderStack.length - 1] : null;
+      const activeFolderId = currentLabFolder ? currentLabFolder.id : (currentResourcesFolder ? currentResourcesFolder.id : null);
+      if (window.openContributeModal) {
+        window.openContributeModal(cat, activeFolderId);
+      }
+    });
+  }
+
+  // 3. Render content body
+  if (currentResourcesSection === 'root') {
+    content.innerHTML = `
+      <div class="resources-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px;">
+        <div class="card resource-card-trigger" data-section="syllabus" style="cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 30px;">
+          <div style="width: 60px; height: 60px; border-radius: 50%; background-color: #ede9fe; color: var(--primary); display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+            <i data-lucide="graduation-cap" style="width: 32px; height: 32px;"></i>
+          </div>
+          <h3 style="color: var(--primary-dark); font-size: 20px; font-weight: 700; margin-bottom: 10px;">Syllabus</h3>
+          <p style="color: var(--text-muted); font-size: 14px;">Access official university syllabus PDFs for all departments and semesters.</p>
+        </div>
+
+        <div class="card resource-card-trigger" data-section="lab_manuals" style="cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 30px;">
+          <div style="width: 60px; height: 60px; border-radius: 50%; background-color: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+            <i data-lucide="file-spreadsheet" style="width: 32px; height: 32px;"></i>
+          </div>
+          <h3 style="color: var(--primary-dark); font-size: 20px; font-weight: 700; margin-bottom: 10px;">Lab Manuals</h3>
+          <p style="color: var(--text-muted); font-size: 14px;">Subject-wise practical files, manuals, experiments instructions, and guides.</p>
+        </div>
+
+        <div class="card resource-card-trigger" data-section="books" style="cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 30px;">
+          <div style="width: 60px; height: 60px; border-radius: 50%; background-color: #e0f2fe; color: #0369a1; display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+            <i data-lucide="book-open" style="width: 32px; height: 32px;"></i>
+          </div>
+          <h3 style="color: var(--primary-dark); font-size: 20px; font-weight: 700; margin-bottom: 10px;">Books</h3>
+          <p style="color: var(--text-muted); font-size: 14px;">Recommended textbooks, references, and digital libraries for engineering.</p>
+        </div>
+
+        <div class="card resource-card-trigger" data-section="simulations" style="cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 30px;">
+          <div style="width: 60px; height: 60px; border-radius: 50%; background-color: #fae8ff; color: #a21caf; display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+            <i data-lucide="cpu" style="width: 32px; height: 32px;"></i>
+          </div>
+          <h3 style="color: var(--primary-dark); font-size: 20px; font-weight: 700; margin-bottom: 10px;">Simulations</h3>
+          <p style="color: var(--text-muted); font-size: 14px;">Interactive virtual labs, circuit simulations, engineering models, code demos, and visual experiments.</p>
+        </div>
+
+        <div class="card resource-card-trigger" data-section="competitive" style="cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 30px;">
+          <div style="width: 60px; height: 60px; border-radius: 50%; background-color: #ffe4e6; color: #e11d48; display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+            <i data-lucide="award" style="width: 32px; height: 32px;"></i>
+          </div>
+          <h3 style="color: var(--primary-dark); font-size: 20px; font-weight: 700; margin-bottom: 10px;">Competitive Exam PYQs</h3>
+          <p style="color: var(--text-muted); font-size: 14px;">Previous year papers for GATE, CAT, UPSC, SSC, Banking, Defence, CUET, JEE, NEET and more.</p>
+        </div>
+
+        <div class="card resource-card-trigger" data-section="calculator" style="cursor: pointer; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 30px;">
+          <div style="width: 60px; height: 60px; border-radius: 50%; background-color: #dcfce7; color: #15803d; display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+            <i data-lucide="calculator" style="width: 32px; height: 32px;"></i>
+          </div>
+          <h3 style="color: var(--primary-dark); font-size: 20px; font-weight: 700; margin-bottom: 10px;">GPA Calculator</h3>
+          <p style="color: var(--text-muted); font-size: 14px;">Quickly calculate your SGPA and CGPA with an interactive semester grid.</p>
+        </div>
+      </div>
+    `;
+
+    document.querySelectorAll('.resource-card-trigger').forEach(card => {
+      card.addEventListener('click', () => {
+        currentResourcesSection = card.getAttribute('data-section');
+        currentResourcesFolder = null;
+        simulationFolderStack = [];
+        roadmapFolderStack = [];
+        labManualsFolderStack = [];
+        renderResourcesView();
+      });
+    });
+
+
+  } else if (currentResourcesSection === 'syllabus') {
+    // Syllabus Documents View
+    content.innerHTML = getListSkeleton();
+    try {
+      const docs = await api.getDocuments('syllabus');
+      if (docs.length === 0) {
+        content.innerHTML = `
+          <div class="empty-state">
+            <i data-lucide="file-text" style="width: 30px; height: 30px; margin-bottom: 10px; color: var(--text-muted);"></i>
+            <p>No syllabus PDFs uploaded yet.</p>
+            ${isStaff ? '<p style="font-size: 14px; margin-top: 6px;">Click "Upload PDF" to add a syllabus.</p>' : ''}
+          </div>
+        `;
+        refreshIcons();
+        return;
+      }
+
+      content.innerHTML = `
+        <h3 style="color: var(--primary-dark); margin-bottom: 16px;">Syllabus Documents</h3>
+        <div class="docs-list">
+          ${docs.map(doc => `
+            <div class="doc-card" style="position: relative;">
+              <button class="btn-like-doc like-heart-btn ${doc.hasLiked ? 'liked' : ''}" data-id="${doc.id}" title="${doc.hasLiked ? 'Unlike' : 'Like'} this resource" style="position: absolute; top: 12px; right: 12px; display: flex; align-items: center; gap: 4px; background: none; border: none; cursor: pointer; color: ${doc.hasLiked ? 'var(--danger)' : 'var(--text-muted)'}; transition: transform 0.2s ease;">
+                <i data-lucide="heart" style="width: 16px; height: 16px; fill: ${doc.hasLiked ? 'var(--danger)' : 'none'}; stroke: ${doc.hasLiked ? 'var(--danger)' : 'currentColor'};"></i>
+                <span class="like-count" style="font-size: 12px; font-weight: 700;">${doc.likesCount || 0}</span>
+              </button>
+              <div class="doc-info">
+                <div class="doc-icon-container">
+                  <i data-lucide="file-text" style="width: 20px; height: 20px;"></i>
+                </div>
+                <div class="doc-meta">
+                  <h5 style="display: flex; align-items: center; gap: 6px;">
+                    ${doc.isPinned ? `<i data-lucide="pin" style="width: 14px; height: 14px; fill: var(--warning); color: var(--warning); flex-shrink: 0;" title="Pinned Document"></i>` : ''}
+                    ${escapeHTML(doc.title)}
+                  </h5>
+                  <div class="doc-meta-details">
+                    <span>Year: ${escapeHTML(doc.year)}</span>
+                    <span>&bull;</span>
+                    <span>${doc.uploadedByRole === 'student' ? 'Contributed By' : 'By'}: ${escapeHTML(doc.uploadedBy)}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="doc-actions" style="position: relative;">
+                <button onclick="openDocumentViewer('${doc.id}', '${escapeHTML(doc.fileName)}', '${doc.type}')" class="btn btn-primary btn-sm"><i data-lucide="eye" style="width:14px;height:14px;"></i> View</button>
+                <div class="more-options-container" style="position: relative; display: inline-block;">
+                  <button class="btn btn-secondary btn-sm btn-more-options" data-id="${doc.id}" style="padding: 8px;" title="More Options">
+                    <i data-lucide="more-vertical" style="width: 14px; height: 14px;"></i>
+                  </button>
+                  <div class="more-options-dropdown" id="dropdown-${doc.id}">
+                    ${isStaff ? `
+                      <button class="dropdown-item btn-pin-doc" data-id="${doc.id}">
+                        <i data-lucide="pin" style="width: 14px; height: 14px; ${doc.isPinned ? 'fill: var(--warning); color: var(--warning);' : ''}"></i>
+                        <span>${doc.isPinned ? 'Unpin' : 'Pin'}</span>
+                      </button>
+                    ` : ''}
+                    ${(currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) ? `
+                      <button class="dropdown-item btn-move-doc" data-id="${doc.id}" data-title="${escapeHTML(doc.title)}">
+                        <i data-lucide="folder-sync" style="width: 14px; height: 14px;"></i>
+                        <span>Shift</span>
+                      </button>
+                    ` : ''}
+                    ${canManageDocument(doc) ? `
+                      <button class="dropdown-item btn-delete-resource-doc" data-id="${doc.id}">
+                        <i data-lucide="trash-2" style="width: 14px; height: 14px; color: var(--danger);"></i>
+                        <span style="color: var(--danger);">Delete</span>
+                      </button>
+                    ` : ''}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+
+      document.querySelectorAll('.btn-delete-resource-doc').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-id');
+          if (!confirm('Delete this syllabus document?')) return;
+          const originalHTML = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i>';
+          refreshIcons();
+          try {
+            await api.deleteDocument(id); const cardToRemove = btn.closest('.doc-card'); if(cardToRemove) { cardToRemove.style.transition = 'opacity 0.3s'; cardToRemove.style.opacity = '0'; setTimeout(() => cardToRemove.remove(), 300); }
+          } catch (err) {
+            alert(err.message || 'Failed to delete');
+            btn.disabled = false;
+            btn.innerHTML = originalHTML;
+            refreshIcons();
+          }
+        });
+      });
+
+      document.querySelectorAll('.btn-like-doc').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          handleLikeToggle(e, renderResourcesView);
+        });
+      });
+
+    } catch (err) {
+      content.innerHTML = `<div class="empty-state">Error loading syllabus documents.</div>`;
+    }
+
+  } else if (currentResourcesSection === 'lab_manuals' || currentResourcesSection === 'books' || currentResourcesSection === 'competitive') {
+    // Multi-level Folders View for Lab Manuals, Books or Competitive Exams using labManualsFolderStack
+    content.innerHTML = getGridSkeleton();
+    try {
+      const isLab = currentResourcesSection === 'lab_manuals';
+      const isComp = currentResourcesSection === 'competitive';
+      const currentLabFolder = labManualsFolderStack.length > 0 ? labManualsFolderStack[labManualsFolderStack.length - 1] : null;
+      const parentId = currentLabFolder ? currentLabFolder.id : null;
+      const docType = isLab ? 'lab_manual' : (isComp ? 'competitive' : 'book');
+
+      const [subFolders, docs] = await Promise.all([
+        api.getFolders(currentResourcesSection, parentId),
+        parentId ? api.getDocuments(docType, parentId) : Promise.resolve([])
+      ]);
+
+      const hasSubFolders = subFolders.length > 0;
+      const hasDocs = docs.length > 0;
+
+      if (!hasSubFolders && !hasDocs && !parentId) {
+        content.innerHTML = `<div class="empty-state"><i data-lucide="info" style="width: 30px; height: 30px; margin-bottom: 10px; color: var(--text-muted);"></i><p>No year folders created yet.</p>${isAdmin ? '<p style="font-size: 14px; margin-top: 6px;">Click "Add Year Folder" to start.</p>' : ''}</div>`;
+        refreshIcons(); return;
+      }
+
+      let html = '';
+      if (hasSubFolders) {
+        const levelLabel = labManualsFolderStack.length === 0 ? 'Year' : (labManualsFolderStack.length === 1 ? 'Branch' : (labManualsFolderStack.length === 2 ? 'Subject' : 'Sub-folder'));
+        html += `<div style="margin-bottom: ${hasDocs ? '28px' : '0'};">${parentId ? `<h4 style="color: var(--text-muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px;">${levelLabel} Folders</h4>` : ''}<div class="folders-grid">${subFolders.map(f => `<div class="folder-item resources-folder-card" data-id="${f.id}" data-name="${f.name}">${isLab ? getFolderIconSvg('#f59e0b', '#d97706') : (isComp ? getFolderIconSvg('#f43f5e', '#e11d48') : getFolderIconSvg('#38bdf8', '#0369a1'))}<span class="folder-name">${escapeHTML(f.name)}</span>${isAdmin ? `<div class="more-options-container" style="position: absolute; top: 12px; right: 12px; display: inline-block;">
+<button class="btn btn-secondary btn-sm btn-more-options" data-id="${f.id}" style="padding: 6px;"><i data-lucide="more-vertical" style="width: 14px; height: 14px;"></i></button>
+<div class="more-options-dropdown" id="dropdown-${f.id}">
+<button class="dropdown-item btn-rename-res-folder" data-id="${f.id}" data-name="${f.name}"><i data-lucide="edit-2" style="width: 14px; height: 14px;"></i><span>Edit</span></button>
+<button class="dropdown-item btn-move-folder" data-id="${f.id}" data-name="${f.name}"><i data-lucide="folder-sync" style="width: 14px; height: 14px;"></i><span>Shift</span></button>
+<button class="dropdown-item btn-delete-res-folder" data-id="${f.id}"><i data-lucide="trash-2" style="width: 14px; height: 14px; color: var(--danger);"></i><span style="color: var(--danger);">Delete</span></button>
+</div></div>` : ''}</div>`).join('')}</div></div>`;
+      }
+      if (hasDocs) {
+        html += `${hasSubFolders ? `<h4 style="color: var(--text-muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px;">${isLab ? 'Lab Manuals' : (isComp ? 'PYQs' : 'Books')}</h4>` : ''}<div class="docs-list">${docs.map(doc => `<div class="doc-card" style="position: relative;"><button class="btn-like-doc like-heart-btn ${doc.hasLiked ? 'liked' : ''}" data-id="${doc.id}" style="position: absolute; top: 12px; right: 12px; display: flex; align-items: center; gap: 4px; background: none; border: none; cursor: pointer; color: ${doc.hasLiked ? 'var(--danger)' : 'var(--text-muted)'}; transition: transform 0.2s ease;"><i data-lucide="heart" style="width: 16px; height: 16px; fill: ${doc.hasLiked ? 'var(--danger)' : 'none'}; stroke: ${doc.hasLiked ? 'var(--danger)' : 'currentColor'};"></i><span class="like-count" style="font-size: 12px; font-weight: 700;">${doc.likesCount || 0}</span></button><div class="doc-info"><div class="doc-icon-container"><i data-lucide="file-text" style="width: 20px; height: 20px;"></i></div><div class="doc-meta"><h5 style="display: flex; align-items: center; gap: 6px;">${doc.isPinned ? '<i data-lucide="pin" style="width: 14px; height: 14px; fill: var(--warning); color: var(--warning); flex-shrink: 0;" title="Pinned Document"></i>' : ''}${escapeHTML(doc.title)}</h5><div class="doc-meta-details"><span>Year: ${escapeHTML(doc.year)}</span><span>&bull;</span><span>${doc.uploadedByRole === 'student' ? 'Contributed By' : 'By'}: ${escapeHTML(doc.uploadedBy)}</span></div></div></div><div class="doc-actions" style="position: relative;"><button onclick="openDocumentViewer('${doc.id}', '${escapeHTML(doc.fileName)}', '${doc.type}')" class="btn btn-primary btn-sm"><i data-lucide="eye" style="width:14px;height:14px;"></i> View</button><div class="more-options-container" style="position: relative; display: inline-block;"><button class="btn btn-secondary btn-sm btn-more-options" data-id="${doc.id}" style="padding: 8px;" title="More Options"><i data-lucide="more-vertical" style="width: 14px; height: 14px;"></i></button><div class="more-options-dropdown" id="dropdown-${doc.id}">${isStaff ? `<button class="dropdown-item btn-pin-doc" data-id="${doc.id}"><i data-lucide="pin" style="width: 14px; height: 14px; ${doc.isPinned ? 'fill: var(--warning); color: var(--warning);' : ''}"></i><span>${doc.isPinned ? 'Unpin' : 'Pin'}</span></button>` : ''}${(currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) ? `<button class="dropdown-item btn-move-doc" data-id="${doc.id}" data-title="${escapeHTML(doc.title)}"><i data-lucide="folder-sync" style="width: 14px; height: 14px;"></i><span>Shift</span></button>` : ''}${canManageDocument(doc) ? `<button class="dropdown-item btn-edit-uploaded-doc" data-id="${doc.id}" data-title="${escapeHTML(doc.title)}" data-subject="${escapeHTML(doc.subject || '')}" data-year="${escapeHTML(doc.year || '')}"><i data-lucide="edit-3" style="width: 14px; height: 14px;"></i><span>Edit</span></button>` : ''}${canManageDocument(doc) ? `<button class="dropdown-item btn-delete-resource-doc" data-id="${doc.id}"><i data-lucide="trash-2" style="width: 14px; height: 14px; color: var(--danger);"></i><span style="color: var(--danger);">Delete</span></button>` : ''}</div></div></div></div>`).join('')}</div>`;
+      }
+      if (!hasSubFolders && !hasDocs && parentId) {
+        html = `<div class="empty-state"><i data-lucide="file-text" style="width: 30px; height: 30px; margin-bottom: 10px; color: var(--text-muted);"></i><p>This folder is empty.</p>${isAdmin ? '<p style="font-size: 14px; margin-top: 6px;">Add a sub-folder or upload a PDF using the buttons above.</p>' : (isStaff ? '<p style="font-size: 14px; margin-top: 6px;">Click "Upload PDF" to add files.</p>' : '')}</div>`;
+      }
+      content.innerHTML = html;
+
+      document.querySelectorAll('.resources-folder-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+          if (e.target.closest('.more-options-container')) return;
+          labManualsFolderStack.push({ id: card.getAttribute('data-id'), name: card.getAttribute('data-name') });
+          renderResourcesView();
+        });
+      });
+
+      if (isAdmin) {
+        document.querySelectorAll('.btn-rename-res-folder').forEach(btn => {
+          btn.addEventListener('click', (e) => { e.stopPropagation(); openFolderModal(currentResourcesSection, btn.getAttribute('data-id'), btn.getAttribute('data-name'), null); });
+        });
+        document.querySelectorAll('.btn-delete-res-folder').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = btn.getAttribute('data-id');
+            if (!confirm('Delete this folder and all documents inside?')) return;
+            const oh = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 10px; height: 10px;"></i>'; refreshIcons();
+            try { await api.deleteFolder(id); await renderResourcesView(); }
+            catch (err) { alert(err.message || 'Failed to delete folder'); btn.disabled = false; btn.innerHTML = oh; refreshIcons(); }
+          });
+        });
+      }
+
+      document.querySelectorAll('.btn-delete-resource-doc').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-id');
+          if (!confirm('Delete this document?')) return;
+          const oh = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i>'; refreshIcons();
+          try { await api.deleteDocument(id); const c = btn.closest('.doc-card'); if(c) { c.style.transition = 'opacity 0.3s'; c.style.opacity = '0'; setTimeout(() => c.remove(), 300); } }
+          catch (err) { alert(err.message || 'Failed to delete'); btn.disabled = false; btn.innerHTML = oh; refreshIcons(); }
+        });
+      });
+      document.querySelectorAll('.btn-like-doc').forEach(btn => { btn.addEventListener('click', (e) => { handleLikeToggle(e, renderResourcesView); }); });
+
+    } catch (err) {
+      content.innerHTML = `<div class="empty-state">Error loading folder contents.</div>`;
+    }
+
+  } else if (currentResourcesSection === 'simulations' || currentResourcesSection === 'roadmaps') {
+    content.innerHTML = getGridSkeleton();
+    const parentId = currentResourcesFolder ? currentResourcesFolder.id : 'null';
+
+    try {
+      let folders = await api.getFolders('simulations', parentId);
+      if (folders.length === 0 && (!currentResourcesFolder || parentId === 'null')) {
+        const legacyFolders = await api.getFolders('roadmaps', parentId);
+        if (legacyFolders.length > 0) folders = legacyFolders;
+      }
+
+      let docs = [];
+      if (currentResourcesFolder) {
+        docs = await api.getDocuments('simulation', currentResourcesFolder.id);
+        if (docs.length === 0) {
+          const legacyDocs = await api.getDocuments('roadmap', currentResourcesFolder.id);
+          if (legacyDocs.length > 0) docs = legacyDocs;
+        }
+      }
+
+      if (folders.length === 0 && docs.length === 0) {
+        content.innerHTML = `
+          <div class="empty-state">
+            <i data-lucide="cpu" style="width: 30px; height: 30px; margin-bottom: 10px; color: var(--text-muted);"></i>
+            <p>No folders or simulations here yet.</p>
+            ${isStaffOrEducator ? `<p style="font-size: 14px; margin-top: 6px;">Click ${!currentResourcesFolder ? '"Add Folder" or ' : ''}"Upload Simulation / PDF" to get started.</p>` : ''}
+          </div>
+        `;
+        refreshIcons();
+        return;
+      }
+
+      let foldersHTML = '';
+      if (folders.length > 0) {
+        foldersHTML = `
+          <h4 style="color: var(--primary-dark); margin-bottom: 12px; font-weight: 700;">Folders</h4>
+          <div class="folders-grid" style="margin-bottom: 30px;">
+            ${folders.map(f => `
+              <div class="folder-item simulation-folder-card roadmap-folder-card" data-id="${f.id}" data-name="${f.name}">
+                ${getFolderIconSvg('#a21caf', '#701a75')}
+                <span class="folder-name">${escapeHTML(f.name)}</span>
+                ${isStaffOrEducator ? `
+                  <div class="more-options-container" style="position: absolute; top: 12px; right: 12px; display: inline-block;">
+<button class="btn btn-secondary btn-sm btn-more-options" data-id="${f.id}" style="padding: 6px;"><i data-lucide="more-vertical" style="width: 14px; height: 14px;"></i></button>
+<div class="more-options-dropdown" id="dropdown-${f.id}">
+<button class="dropdown-item btn-rename-roadmap-folder" data-id="${f.id}" data-name="${f.name}"><i data-lucide="edit-2" style="width: 14px; height: 14px;"></i><span>Edit</span></button>
+<button class="dropdown-item btn-move-folder" data-id="${f.id}" data-name="${f.name}"><i data-lucide="folder-sync" style="width: 14px; height: 14px;"></i><span>Shift</span></button>
+<button class="dropdown-item btn-delete-roadmap-folder" data-id="${f.id}"><i data-lucide="trash-2" style="width: 14px; height: 14px; color: var(--danger);"></i><span style="color: var(--danger);">Delete</span></button>
+</div></div>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+
+      let docsHTML = '';
+      if (docs.length > 0) {
+        docsHTML = `
+          <h4 style="color: var(--primary-dark); margin-bottom: 12px; font-weight: 700;">Simulation Files</h4>
+          <div class="docs-list">
+            ${docs.map(doc => `
+              <div class="doc-card" style="position: relative; border-left: 4px solid #a21caf;">
+                <div class="doc-info">
+                  <div class="doc-icon-container" style="background-color: #fae8ff; color: #a21caf;">
+                    <i data-lucide="file-text" style="width: 20px; height: 20px;"></i>
+                  </div>
+                  <div class="doc-meta">
+                    <h5 style="display: flex; align-items: center; gap: 6px;">
+                      ${doc.isPinned ? `<i data-lucide="pin" style="width: 14px; height: 14px; fill: var(--warning); color: var(--warning); flex-shrink: 0;" title="Pinned Document"></i>` : ''}
+                      ${escapeHTML(doc.title)}
+                    </h5>
+                    <div class="doc-meta-details">
+                      <span>Year: ${escapeHTML(doc.year)}</span>
+                      <span>&bull;</span>
+                      <span>${doc.uploadedByRole === 'student' ? 'Contributed By' : 'By'}: ${escapeHTML(doc.uploadedBy)}</span>
+                      <span>&bull;</span>
+                      <span>${new Date(doc.createdAt).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button class="btn-like-doc like-heart-btn ${doc.hasLiked ? 'liked' : ''}" data-id="${doc.id}" title="${doc.hasLiked ? 'Unlike' : 'Like'} this resource" style="position: absolute; top: 12px; right: 12px; display: flex; align-items: center; gap: 4px; background: none; border: none; cursor: pointer; color: ${doc.hasLiked ? 'var(--danger)' : 'var(--text-muted)'}; transition: transform 0.2s ease;">
+                  <i data-lucide="heart" style="width: 16px; height: 16px; fill: ${doc.hasLiked ? 'var(--danger)' : 'none'}; stroke: ${doc.hasLiked ? 'var(--danger)' : 'currentColor'};"></i>
+                  <span class="like-count" style="font-size: 12px; font-weight: 700;">${doc.likesCount || 0}</span>
+                </button>
+
+                <div class="doc-actions" style="position: relative;">
+                  <a href="${doc.fileUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm"><i data-lucide="eye" style="width:14px;height:14px;"></i> View</a>
+                  <div class="more-options-container" style="position: relative; display: inline-block;">
+                    <button class="btn btn-secondary btn-sm btn-more-options" data-id="${doc.id}" style="padding: 8px;" title="More Options">
+                      <i data-lucide="more-vertical" style="width: 14px; height: 14px;"></i>
+                    </button>
+                    <div class="more-options-dropdown" id="dropdown-${doc.id}">
+                      ${isStaff ? `
+                        <button class="dropdown-item btn-pin-doc" data-id="${doc.id}">
+                          <i data-lucide="pin" style="width: 14px; height: 14px; ${doc.isPinned ? 'fill: var(--warning); color: var(--warning);' : ''}"></i>
+                          <span>${doc.isPinned ? 'Unpin' : 'Pin'}</span>
+                        </button>
+                      ` : ''}
+                      ${(currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) ? `
+                        <button class="dropdown-item btn-move-doc" data-id="${doc.id}" data-title="${escapeHTML(doc.title)}">
+                          <i data-lucide="folder-sync" style="width: 14px; height: 14px;"></i>
+                          <span>Shift</span>
+                        </button>
+                      ` : ''}
+                      ${canManageDocument(doc) ? `
+                        <button class="dropdown-item btn-delete-roadmap-doc" data-id="${doc.id}">
+                          <i data-lucide="trash-2" style="width: 14px; height: 14px; color: var(--danger);"></i>
+                          <span style="color: var(--danger);">Delete</span>
+                        </button>
+                      ` : ''}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+
+      content.innerHTML = `
+        <div style="padding: 10px 0;">
+          ${foldersHTML}
+          ${docsHTML}
+        </div>
+      `;
+
+      // Event listeners
+      document.querySelectorAll('.simulation-folder-card, .roadmap-folder-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+          if (e.target.closest('.more-options-container')) return;
+          const folderId = card.getAttribute('data-id');
+          const folderName = card.getAttribute('data-name');
+          const folder = { id: folderId, name: folderName };
+          simulationFolderStack.push(folder);
+          roadmapFolderStack = simulationFolderStack;
+          currentResourcesFolder = folder;
+          renderResourcesView();
+        });
+      });
+
+      if (isStaffOrEducator) {
+        document.querySelectorAll('.btn-rename-roadmap-folder').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openFolderModal('simulations', btn.getAttribute('data-id'), btn.getAttribute('data-name'));
+          });
+        });
+
+        document.querySelectorAll('.btn-delete-roadmap-folder').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = btn.getAttribute('data-id');
+            if (!confirm('Are you sure you want to delete this folder and all subfolders and documents inside?')) return;
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 10px; height: 10px;"></i>';
+            refreshIcons();
+            try {
+              await api.deleteFolder(id);
+              await renderResourcesView();
+            } catch (err) {
+              alert(err.message || 'Failed to delete folder');
+              btn.disabled = false;
+              btn.innerHTML = originalHTML;
+              refreshIcons();
+            }
+          });
+        });
+
+        document.querySelectorAll('.btn-delete-roadmap-doc').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-id');
+            if (!confirm('Delete this simulation?')) return;
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i>';
+            refreshIcons();
+            try {
+              await api.deleteDocument(id); const cardToRemove = btn.closest('.doc-card'); if(cardToRemove) { cardToRemove.style.transition = 'opacity 0.3s'; cardToRemove.style.opacity = '0'; setTimeout(() => cardToRemove.remove(), 300); }
+            } catch (err) {
+              alert(err.message || 'Failed to delete simulation');
+              btn.disabled = false;
+              btn.innerHTML = originalHTML;
+              refreshIcons();
+            }
+          });
+        });
+      }
+
+      // Like handlers for roadmaps / simulations
+      document.querySelectorAll('.btn-like-doc').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          handleLikeToggle(e, renderResourcesView);
+        });
+      });
+
+    } catch (err) {
+      content.innerHTML = `<div class="empty-state" style="color: var(--danger);">Failed to load simulations: ${escapeHTML(err.message)}</div>`;
+    }
+
+  } else if (currentResourcesSection === 'calculator') {
+    // SGPA & CGPA CALCULATOR SHEET
+    renderGPAThresholdsView(content);
+  }
+
+  refreshIcons();
+}
+
+function handleResourcesBack() {
+  if (currentResourcesSection === 'simulations' || currentResourcesSection === 'roadmaps') {
+    if (simulationFolderStack.length > 0) {
+      simulationFolderStack.pop();
+      roadmapFolderStack = simulationFolderStack;
+      if (simulationFolderStack.length > 0) {
+        currentResourcesFolder = simulationFolderStack[simulationFolderStack.length - 1];
+      } else {
+        currentResourcesFolder = null;
+      }
+    } else {
+      currentResourcesSection = 'root';
+      currentResourcesFolder = null;
+    }
+  } else if (currentResourcesSection === 'lab_manuals' || currentResourcesSection === 'books' || currentResourcesSection === 'competitive') {
+    if (labManualsFolderStack.length > 0) {
+      labManualsFolderStack.pop();
+    } else {
+      currentResourcesSection = 'root';
+    }
+  } else {
+    currentResourcesSection = 'root';
+    currentResourcesFolder = null;
+  }
+  renderResourcesView();
+}
+
+
+// Render GPA Calculator sheets
+function renderGPAThresholdsView(mountElement) {
+  let calculatedSgpa = null;
+  let calculatedCgpa = null;
+  let activeTab = 'sgpa'; // 'sgpa' | 'cgpa'
+
+  const computeAndRender = () => {
+    mountElement.innerHTML = `
+      <div class="card" style="max-width: 800px; margin: 0 auto;">
+        <div class="calculator-tabs">
+          <button class="calc-tab ${activeTab === 'sgpa' ? 'active' : ''}" id="tab-sgpa-trigger">SGPA Calculator</button>
+          <button class="calc-tab ${activeTab === 'cgpa' ? 'active' : ''}" id="tab-cgpa-trigger">CGPA Calculator</button>
+        </div>
+
+        <!-- SGPA SHEET -->
+        <div id="sheet-sgpa" style="display: ${activeTab === 'sgpa' ? 'block' : 'none'};">
+          <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+            Enter your course credit hours and letter grade. SGPA is calculated as weighted average of grade points.
+          </p>
+
+          <div class="calc-row-header">
+            <span>Course Title (Optional)</span>
+            <span>Credits (Weight)</span>
+            <span>Letter Grade</span>
+            <span></span>
+          </div>
+
+          <div id="sgpa-rows-container">
+            ${sgpaRows.map((row, idx) => `
+              <div class="calc-row">
+                <input
+                  type="text"
+                  class="form-input sgpa-course-name"
+                  placeholder="e.g. Mathematics I"
+                  value="${escapeHTML(row.courseName)}"
+                  data-idx="${idx}"
+                />
+                <input
+                  type="number"
+                  class="form-input sgpa-credits"
+                  min="1"
+                  max="10"
+                  placeholder="Credits"
+                  value="${row.credits}"
+                  data-idx="${idx}"
+                />
+                <select class="form-select sgpa-grade" data-idx="${idx}">
+                  ${Object.keys(GRADE_POINTS).map(g => `
+                    <option value="${g}" ${row.grade === g ? 'selected' : ''}>${g} (GP: ${GRADE_POINTS[g]})</option>
+                  `).join('')}
+                </select>
+                <button 
+                  class="btn btn-danger btn-sm btn-remove-sgpa-row"
+                  style="padding: 8px 10px; border-radius: 8px;"
+                  data-idx="${idx}"
+                  ${sgpaRows.length <= 1 ? 'disabled' : ''}
+                >
+                  <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                </button>
+              </div>
+            `).join('')}
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button id="btn-add-sgpa-row" class="btn btn-secondary btn-sm">+ Add Course</button>
+            <button id="btn-calc-sgpa" class="btn btn-primary btn-sm">Calculate SGPA</button>
+          </div>
+
+          ${calculatedSgpa !== null ? `
+            <div class="result-box" style="animation: modalEnter 0.3s ease;">
+              <p style="font-weight: 600; font-size: 15px;">YOUR SGPA IS</p>
+              <h2 class="result-val">${calculatedSgpa}</h2>
+              <p style="font-size: 12px; opacity: 0.8;">Calculation: Sum(Credits * GradePoints) / Sum(Credits)</p>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- CGPA SHEET -->
+        <div id="sheet-cgpa" style="display: ${activeTab === 'cgpa' ? 'block' : 'none'};">
+          <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+            Enter your SGPA and total credits earned per semester. CGPA is computed as a credit-weighted average.
+          </p>
+
+          <div class="calc-row-header">
+            <span>Semester</span>
+            <span>SGPA (0.00 - 10.00)</span>
+            <span>Credits (Weight)</span>
+            <span></span>
+          </div>
+
+          <div id="cgpa-rows-container">
+            ${cgpaRows.map((row, idx) => `
+              <div class="calc-row">
+                <input
+                  type="text"
+                  class="form-input cgpa-sem-name"
+                  value="${escapeHTML(row.semesterName)}"
+                  data-idx="${idx}"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="10"
+                  class="form-input cgpa-sgpa"
+                  placeholder="e.g. 8.42"
+                  value="${row.sgpa}"
+                  data-idx="${idx}"
+                  required
+                />
+                <input
+                  type="number"
+                  min="1"
+                  max="40"
+                  class="form-input cgpa-credits"
+                  placeholder="Credits"
+                  value="${row.credits}"
+                  data-idx="${idx}"
+                />
+                <button 
+                  class="btn btn-danger btn-sm btn-remove-cgpa-row"
+                  style="padding: 8px 10px; border-radius: 8px;"
+                  data-idx="${idx}"
+                  ${cgpaRows.length <= 1 ? 'disabled' : ''}
+                >
+                  <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                </button>
+              </div>
+            `).join('')}
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button id="btn-add-cgpa-row" class="btn btn-secondary btn-sm">+ Add Semester</button>
+            <button id="btn-calc-cgpa" class="btn btn-primary btn-sm">Calculate CGPA</button>
+          </div>
+
+          ${calculatedCgpa !== null ? `
+            <div class="result-box" style="animation: modalEnter 0.3s ease; background: linear-gradient(135deg, #15803d 0%, #22c55e 100%)">
+              <p style="font-weight: 600; font-size: 15px;">YOUR CGPA IS</p>
+              <h2 class="result-val">${calculatedCgpa}</h2>
+              <p style="font-size: 12px; opacity: 0.8;">Credit-weighted CGPA calculated across semesters.</p>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+
+    refreshIcons();
+
+    // Event Triggers
+    document.getElementById('tab-sgpa-trigger').addEventListener('click', () => { activeTab = 'sgpa'; computeAndRender(); });
+    document.getElementById('tab-cgpa-trigger').addEventListener('click', () => { activeTab = 'cgpa'; computeAndRender(); });
+
+    // SGPA triggers
+    document.getElementById('btn-add-sgpa-row').addEventListener('click', () => {
+      sgpaRows.push({ id: Date.now(), courseName: '', credits: 3, grade: 'A' });
+      computeAndRender();
+    });
+
+    document.querySelectorAll('.btn-remove-sgpa-row').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.getAttribute('data-idx'));
+        sgpaRows.splice(idx, 1);
+        computeAndRender();
+      });
+    });
+
+    // Save values typed in input fields back to state
+    document.querySelectorAll('.sgpa-course-name').forEach(inp => {
+      inp.addEventListener('input', (e) => {
+        const idx = parseInt(inp.getAttribute('data-idx'));
+        sgpaRows[idx].courseName = e.target.value;
+      });
+    });
+    document.querySelectorAll('.sgpa-credits').forEach(inp => {
+      inp.addEventListener('input', (e) => {
+        const idx = parseInt(inp.getAttribute('data-idx'));
+        sgpaRows[idx].credits = e.target.value;
+      });
+    });
+    document.querySelectorAll('.sgpa-grade').forEach(sel => {
+      sel.addEventListener('change', (e) => {
+        const idx = parseInt(sel.getAttribute('data-idx'));
+        sgpaRows[idx].grade = e.target.value;
+      });
+    });
+
+    document.getElementById('btn-calc-sgpa').addEventListener('click', () => {
+      let totalCredits = 0;
+      let totalPoints = 0;
+      sgpaRows.forEach(row => {
+        const cred = parseFloat(row.credits);
+        const pts = GRADE_POINTS[row.grade];
+        if (!isNaN(cred) && cred > 0) {
+          totalCredits += cred;
+          totalPoints += (cred * pts);
+        }
+      });
+      calculatedSgpa = totalCredits > 0 ? (totalPoints / totalCredits).toFixed(2) : '0.00';
+      computeAndRender();
+    });
+
+    // CGPA triggers
+    document.getElementById('btn-add-cgpa-row').addEventListener('click', () => {
+      cgpaRows.push({ id: Date.now(), semesterName: `Semester ${cgpaRows.length + 1}`, sgpa: '', credits: 20 });
+      computeAndRender();
+    });
+
+    document.querySelectorAll('.btn-remove-cgpa-row').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.getAttribute('data-idx'));
+        cgpaRows.splice(idx, 1);
+        computeAndRender();
+      });
+    });
+
+    document.querySelectorAll('.cgpa-sem-name').forEach(inp => {
+      inp.addEventListener('input', (e) => {
+        const idx = parseInt(inp.getAttribute('data-idx'));
+        cgpaRows[idx].semesterName = e.target.value;
+      });
+    });
+    document.querySelectorAll('.cgpa-sgpa').forEach(inp => {
+      inp.addEventListener('input', (e) => {
+        const idx = parseInt(inp.getAttribute('data-idx'));
+        cgpaRows[idx].sgpa = e.target.value;
+      });
+    });
+    document.querySelectorAll('.cgpa-credits').forEach(inp => {
+      inp.addEventListener('input', (e) => {
+        const idx = parseInt(inp.getAttribute('data-idx'));
+        cgpaRows[idx].credits = e.target.value;
+      });
+    });
+
+    document.getElementById('btn-calc-cgpa').addEventListener('click', () => {
+      let totalCredits = 0;
+      let totalPoints = 0;
+      cgpaRows.forEach(row => {
+        const sg = parseFloat(row.sgpa);
+        const cred = parseFloat(row.credits);
+        if (!isNaN(sg) && sg >= 0 && sg <= 10 && !isNaN(cred) && cred > 0) {
+          totalCredits += cred;
+          totalPoints += (sg * cred);
+        }
+      });
+      calculatedCgpa = totalCredits > 0 ? (totalPoints / totalCredits).toFixed(2) : '0.00';
+      computeAndRender();
+    });
+  };
+
+  computeAndRender();
+}
+
+function renderProfileView() {
+  if (!currentUser) {
+    navigate('/login');
+    return;
+  }
+
+  const heroCard = document.getElementById('profile-hero-card');
+  const menuGroup = document.getElementById('profile-sections-group');
+  if (!heroCard || !menuGroup) return;
+
+  // Populate hero card
+  heroCard.innerHTML = `
+    <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+      <div style="width: 70px; height: 70px; border-radius: 50%; background: white; color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 800; box-shadow: var(--shadow-sm); margin-bottom: 12px;">
+        ${escapeHTML(currentUser.name.charAt(0).toUpperCase())}
+      </div>
+      <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <h3 style="color: white; margin: 0; font-size: 19px; font-weight: 700;">${escapeHTML(capitalizeName(currentUser.name))}</h3>
+        <button type="button" class="btn-open-edit-name" style="background: rgba(255, 255, 255, 0.25); border: 1px solid rgba(255, 255, 255, 0.45); color: white; border-radius: 50%; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(4px);" title="Edit Name">
+          <i data-lucide="pencil" style="width: 13px; height: 13px;"></i>
+        </button>
+      </div>
+      <p style="color: rgba(255, 255, 255, 0.85); font-size: 13px; margin: 4px 0 2px 0;">${escapeHTML(currentUser.phone)}</p>
+      ${currentUser.email ? `
+        <div style="color: rgba(255, 255, 255, 0.95); font-size: 13px; margin: 2px 0 10px 0; display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap;">
+          <i data-lucide="mail" style="width: 14px; height: 14px; flex-shrink: 0;"></i>
+          <span>${escapeHTML(currentUser.email)}</span>
+        </div>
+      ` : `
+        <div style="color: rgba(255, 255, 255, 0.95); font-size: 13px; margin: 2px 0 10px 0; display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap;">
+          <i data-lucide="mail" style="width: 14px; height: 14px; flex-shrink: 0;"></i>
+          <span style="opacity: 0.9; font-style: italic;">No email added</span>
+          <button type="button" class="btn-open-update-email" style="padding: 2px 8px; font-size: 11px; font-weight: 700; border-radius: 12px; background: rgba(255, 255, 255, 0.25); border: 1px solid rgba(255, 255, 255, 0.45); color: white; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; backdrop-filter: blur(4px);" title="Link your email">
+            + Add Email
+          </button>
+        </div>
+      `}
+      <span style="background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.25); color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase;">
+        ${currentUser.role === 'superadmin' ? 'SUPER ADMIN' : (currentUser.role === 'educator' ? 'TEACHER' : currentUser.role)}
+      </span>
+    </div>
+  `;
+
+  // Build menu items
+  let html = '';
+
+  // 1. Account Section
+  html += `
+    <div class="profile-menu-section collapsed">
+      <div class="profile-menu-section-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+        <span>Account</span>
+        <span class="section-toggle-icon" style="display: flex; align-items: center; justify-content: center;"><i data-lucide="plus" style="width: 16px; height: 16px;"></i></span>
+      </div>
+      <div class="profile-menu-items">
+        <a href="javascript:void(0)" class="profile-menu-item btn-open-edit-name">
+          <div class="item-left"><i data-lucide="pencil"></i><span>Edit Name</span></div>
+          <i data-lucide="chevron-right" class="arrow-right"></i>
+        </a>
+        ${currentUser.role === 'student' ? `
+          <a href="#/my-contributions" class="profile-menu-item">
+            <div class="item-left"><i data-lucide="award"></i><span>My Contributions</span></div>
+            <i data-lucide="chevron-right" class="arrow-right"></i>
+          </a>
+        ` : `
+          <a href="#/my-uploads" class="profile-menu-item">
+            <div class="item-left"><i data-lucide="folder-heart"></i><span>My Uploads</span></div>
+            <i data-lucide="chevron-right" class="arrow-right"></i>
+          </a>
+        `}
+        <a href="#/contributors" class="profile-menu-item">
+          <div class="item-left"><i data-lucide="trophy"></i><span>Top Contributors</span></div>
+          <i data-lucide="chevron-right" class="arrow-right"></i>
+        </a>
+        <a href="javascript:void(0)" onclick="downloadUserManual()" class="profile-menu-item">
+          <div class="item-left"><i data-lucide="file-text"></i><span>View Manual</span></div>
+          <i data-lucide="chevron-right" class="arrow-right"></i>
+        </a>
+        <a href="#/reset-password" class="profile-menu-item">
+          <div class="item-left"><i data-lucide="key-round"></i><span>Reset Password</span></div>
+          <i data-lucide="chevron-right" class="arrow-right"></i>
+        </a>
+        <a href="#/reviews" class="profile-menu-item">
+          <div class="item-left"><i data-lucide="star"></i><span>Write a Review</span></div>
+          <i data-lucide="chevron-right" class="arrow-right"></i>
+        </a>
+        <a href="https://github.com/ankitgl200/studymyteStudents" target="_blank" rel="noopener noreferrer" class="profile-menu-item">
+          <div class="item-left">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+            <span>Contribute</span>
+          </div>
+          <i data-lucide="chevron-right" class="arrow-right"></i>
+        </a>
+      </div>
+    </div>
+  `;
+
+  // 2. Tools Section
+  html += `
+    <div class="profile-menu-section collapsed" style="margin-top: 16px;">
+      <div class="profile-menu-section-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+        <span>Tools</span>
+        <span class="section-toggle-icon" style="display: flex; align-items: center; justify-content: center;"><i data-lucide="plus" style="width: 16px; height: 16px;"></i></span>
+      </div>
+      <div class="profile-menu-items">
+
+        <a href="javascript:void(0)" class="profile-menu-item btn-download-app-trigger">
+          <div class="item-left"><i data-lucide="smartphone"></i><span>Download App</span></div>
+          <i data-lucide="chevron-right" class="arrow-right"></i>
+        </a>
+      </div>
+    </div>
+  `;
+
+  // 3. Support Section
+  html += `
+    <div class="profile-menu-section collapsed" style="margin-top: 16px;">
+      <div class="profile-menu-section-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+        <span>Support</span>
+        <span class="section-toggle-icon" style="display: flex; align-items: center; justify-content: center;"><i data-lucide="plus" style="width: 16px; height: 16px;"></i></span>
+      </div>
+      <div class="profile-menu-items">
+        <a href="#/about" class="profile-menu-item">
+          <div class="item-left"><i data-lucide="info"></i><span>About Us</span></div>
+          <i data-lucide="chevron-right" class="arrow-right"></i>
+        </a>
+        <a href="#/support" class="profile-menu-item">
+          <div class="item-left"><i data-lucide="help-circle"></i><span>Help & Support</span></div>
+          <i data-lucide="chevron-right" class="arrow-right"></i>
+        </a>
+        <a href="javascript:void(0)" onclick="openDonationModal()" class="profile-menu-item">
+          <div class="item-left"><i data-lucide="heart-handshake" style="color: #ec4899;"></i><span style="color: #ec4899; font-weight: 600;">Support StudyMyte (Donate)</span></div>
+          <i data-lucide="chevron-right" class="arrow-right"></i>
+        </a>
+        <a href="#/privacy" class="profile-menu-item">
+          <div class="item-left"><i data-lucide="shield"></i><span>Privacy Policy</span></div>
+          <i data-lucide="chevron-right" class="arrow-right"></i>
+        </a>
+        <a href="#/terms" class="profile-menu-item">
+          <div class="item-left"><i data-lucide="file-text"></i><span>Terms of Service</span></div>
+          <i data-lucide="chevron-right" class="arrow-right"></i>
+        </a>
+      </div>
+    </div>
+  `;
+
+  // 3.5 Customization Section
+  html += `
+    <div class="profile-menu-section collapsed" style="margin-top: 16px;">
+      <div class="profile-menu-section-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+        <span>Customization</span>
+        <span class="section-toggle-icon" style="display: flex; align-items: center; justify-content: center;"><i data-lucide="plus" style="width: 16px; height: 16px;"></i></span>
+      </div>
+      <div class="profile-menu-items">
+        <a href="#/appearance" class="profile-menu-item">
+          <div class="item-left"><i data-lucide="type"></i><span>Typography & Fonts</span></div>
+          <i data-lucide="chevron-right" class="arrow-right"></i>
+        </a>
+        <div class="profile-menu-item" style="cursor: default;">
+          <div class="item-left"><i data-lucide="moon"></i><span>Dark Mode</span></div>
+          <label class="ui-toggle-switch" style="margin: 0;" title="Toggle Dark Mode">
+            <input type="checkbox" id="theme-mode-toggle-mobile" aria-label="Toggle Dark Mode">
+            <span class="ui-toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // 3.6 Connect Section
+  html += `
+    <div class="profile-menu-section collapsed" style="margin-top: 16px;">
+      <div class="profile-menu-section-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+        <span>Connect</span>
+        <span class="section-toggle-icon" style="display: flex; align-items: center; justify-content: center;"><i data-lucide="plus" style="width: 16px; height: 16px;"></i></span>
+      </div>
+      <div class="profile-menu-items">
+        <a href="https://www.instagram.com/studymyte_0fficial?utm_source=qr&igsh=dGh3cG02MnFhbTJl" target="_blank" rel="noopener noreferrer" class="profile-menu-item">
+          <div class="item-left">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+            <span>Instagram</span>
+          </div>
+          <i data-lucide="plus" class="arrow-right"></i>
+        </a>
+        <a href="https://t.me/+Y8-xHuu_XBo0ZDBl" target="_blank" rel="noopener noreferrer" class="profile-menu-item">
+          <div class="item-left">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;"><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            <span>Telegram</span>
+          </div>
+          <i data-lucide="plus" class="arrow-right"></i>
+        </a>
+      </div>
+    </div>
+  `;
+
+  // 4. Admin Section (Admins/Superadmins only)
+  if (currentUser.role === 'admin' || currentUser.role === 'superadmin') {
+    const isMobile = window.innerWidth <= 768;
+    html += `
+      <div class="profile-menu-section collapsed" style="margin-top: 16px;">
+        <div class="profile-menu-section-header" style="color: var(--danger); cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+          <span>Admin Panel</span>
+          <span class="section-toggle-icon" style="display: flex; align-items: center; justify-content: center;"><i data-lucide="plus" style="width: 16px; height: 16px;"></i></span>
+        </div>
+        <div class="profile-menu-items">
+    `;
+    if (isMobile) {
+      html += `
+          <a href="#/admin/approvals" class="profile-menu-item">
+            <div class="item-left"><i data-lucide="user-check" style="color: var(--danger);"></i><span>Pending Approvals</span></div>
+            <i data-lucide="chevron-right" class="arrow-right"></i>
+          </a>
+          <a href="#/admin/users" class="profile-menu-item">
+            <div class="item-left"><i data-lucide="users" style="color: var(--danger);"></i><span>User Directory</span></div>
+            <i data-lucide="chevron-right" class="arrow-right"></i>
+          </a>
+          <a href="#/admin/contributions" class="profile-menu-item">
+            <div class="item-left"><i data-lucide="upload-cloud" style="color: var(--danger);"></i><span>Pending Contributions</span></div>
+            <i data-lucide="chevron-right" class="arrow-right"></i>
+          </a>
+          <a href="#/admin/support" class="profile-menu-item">
+            <div class="item-left"><i data-lucide="help-circle" style="color: var(--danger);"></i><span>Help & Support Requests</span></div>
+            <i data-lucide="chevron-right" class="arrow-right"></i>
+          </a>
+          ${(currentUser.role === 'superadmin' || currentUser.role === 'admin') ? `
+            <a href="#/admin/compose" class="profile-menu-item">
+              <div class="item-left"><i data-lucide="send" style="color: var(--danger);"></i><span>Send Notification</span></div>
+              <i data-lucide="chevron-right" class="arrow-right"></i>
+            </a>
+            <a href="#/admin/notifications" class="profile-menu-item">
+              <div class="item-left"><i data-lucide="mail" style="color: var(--danger);"></i><span>Sent Notifications</span></div>
+              <i data-lucide="chevron-right" class="arrow-right"></i>
+            </a>
+          ` : ''}
+          <a href="#/admin/reviews" class="profile-menu-item">
+            <div class="item-left"><i data-lucide="star" style="color: var(--danger);"></i><span>User Reviews</span></div>
+            <i data-lucide="chevron-right" class="arrow-right"></i>
+          </a>
+      `;
+    } else {
+      html += `
+          <a href="#/admin" class="profile-menu-item">
+            <div class="item-left"><i data-lucide="shield-alert" style="color: var(--danger);"></i><span>Admin Dashboard</span></div>
+            <i data-lucide="chevron-right" class="arrow-right"></i>
+          </a>
+          <a href="#/admin?tab=users" class="profile-menu-item">
+            <div class="item-left"><i data-lucide="users" style="color: var(--danger);"></i><span>Manage Users</span></div>
+            <i data-lucide="chevron-right" class="arrow-right"></i>
+          </a>
+          <a href="#/admin?tab=pending" class="profile-menu-item">
+            <div class="item-left"><i data-lucide="user-check" style="color: var(--danger);"></i><span>Teacher Approval</span></div>
+            <i data-lucide="chevron-right" class="arrow-right"></i>
+          </a>
+          <a href="#/admin?tab=compose" class="profile-menu-item">
+            <div class="item-left"><i data-lucide="send" style="color: var(--danger);"></i><span>Send Notification</span></div>
+            <i data-lucide="chevron-right" class="arrow-right"></i>
+          </a>
+          <a href="#/admin?tab=reviews" class="profile-menu-item">
+            <div class="item-left"><i data-lucide="star" style="color: var(--danger);"></i><span>User Reviews</span></div>
+            <i data-lucide="chevron-right" class="arrow-right"></i>
+          </a>
+      `;
+    }
+    html += `
+        </div>
+      </div>
+    `;
+  }
+
+  menuGroup.innerHTML = html;
+
+  // Bind expand/collapse listeners to headers
+  const headers = menuGroup.querySelectorAll('.profile-menu-section-header');
+  headers.forEach(header => {
+    header.addEventListener('click', () => {
+      const section = header.closest('.profile-menu-section');
+      if (!section) return;
+
+      const isCollapsed = section.classList.contains('collapsed');
+      section.classList.toggle('collapsed');
+
+      const toggle = header.querySelector('.section-toggle-icon');
+      if (toggle) {
+        if (isCollapsed) {
+          toggle.innerHTML = '<i data-lucide="minus" style="width: 16px; height: 16px;"></i>';
+        } else {
+          toggle.innerHTML = '<i data-lucide="plus" style="width: 16px; height: 16px;"></i>';
+        }
+      }
+      refreshIcons();
+    });
+  });
+
+  // Add event listener to mobile theme toggle and set initial checked state
+  const mobThemeToggle = document.getElementById('theme-mode-toggle-mobile');
+  if (mobThemeToggle) {
+    const currentTheme = localStorage.getItem('studymyte-theme-mode') || 'light';
+    mobThemeToggle.checked = (currentTheme === 'dark');
+    mobThemeToggle.addEventListener('change', (e) => {
+      const isDark = e.target.checked;
+      setThemeMode(isDark ? 'dark' : 'light', true);
+    });
+  }
+
+  refreshIcons();
+}
+
+function showTermsModal() {
+  const modal = document.getElementById('modal-terms');
+  if (modal) {
+    modal.style.display = 'flex';
+    const closeBtn = document.getElementById('modal-terms-close');
+    const footerBtn = document.getElementById('btn-terms-close-footer');
+    const closeFn = () => { modal.style.display = 'none'; };
+    if (closeBtn) closeBtn.onclick = closeFn;
+    if (footerBtn) footerBtn.onclick = closeFn;
+    modal.onclick = (e) => { if (e.target === modal) closeFn(); };
+  }
+}
+
+function showPrivacyModal() {
+  const modal = document.getElementById('modal-privacy');
+  if (modal) {
+    modal.style.display = 'flex';
+    const closeBtn = document.getElementById('modal-privacy-close');
+    const footerBtn = document.getElementById('btn-privacy-close-footer');
+    const closeFn = () => { modal.style.display = 'none'; };
+    if (closeBtn) closeBtn.onclick = closeFn;
+    if (footerBtn) footerBtn.onclick = closeFn;
+    modal.onclick = (e) => { if (e.target === modal) closeFn(); };
+  }
+}
+
+async function downloadUserManual() {
+  const { jsPDF } = window.jspdf;
+  
+  const loadImg = (src) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  };
+
+  const [imgProfile, imgFolders, imgResources, imgNotes] = await Promise.all([
+    loadImg('media_1786884488200.jpg'),
+    loadImg('media_1786884488206.jpg'),
+    loadImg('media_1786884488213.jpg'),
+    loadImg('media_1786884488234.jpg')
+  ]);
+
+  const doc = new jsPDF('p', 'mm', 'a4'); // A4 size: 210mm x 297mm
+  
+  // Custom Color Constants (RGB)
+  const PRIMARY = [79, 70, 229];    // Indigo (#4f46e5)
+  const PRIMARY_DARK = [55, 48, 163]; // Dark Indigo
+  const SECONDARY = [5, 150, 105];   // Emerald Green (#059669)
+  const TEXT_MAIN = [30, 41, 59];    // Slate 800
+  const TEXT_MUTED = [100, 116, 139]; // Slate 500
+  const WHITE = [255, 255, 255];
+  
+  // Helper: Draw Header & Footer for pages (except Page 1)
+  function drawPageTemplate(pageNum, totalPages) {
+    // Header bar
+    doc.setFillColor(...PRIMARY);
+    doc.rect(0, 0, 210, 12, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...WHITE);
+    doc.text('STUDYMYTE - ACADEMIC PORTAL & CENTRAL LIBRARY GUIDE', 15, 8);
+    
+    // Footer bar
+    doc.setFillColor(...TEXT_MAIN);
+    doc.rect(0, 287, 210, 10, 'F');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...WHITE);
+    doc.text('StudyMyte Official User Manual', 15, 293.5);
+    doc.text(`Page ${pageNum} of ${totalPages}`, 180, 293.5);
+  }
+
+  // Helper: Draw section title
+  function drawSectionHeader(title, x, y) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(...PRIMARY_DARK);
+    doc.text(title, x, y);
+    
+    // Draw horizontal colored accent line below title
+    doc.setFillColor(...SECONDARY);
+    doc.rect(x, y + 1.5, 45, 0.8, 'F');
+    return y + 8;
+  }
+  
+  // Helper: Print wrapped text line by line
+  function printWrappedText(doc, text, x, y, maxW, lineHeight = 6) {
+    const lines = doc.splitTextToSize(text, maxW);
+    lines.forEach(line => {
+      doc.text(line, x, y);
+      y += lineHeight;
+    });
+    return y; // returns the new Y coordinate!
+  }
+  
+  // ----------------------------------------------------
+  // PAGE 1: COVER PAGE
+  // ----------------------------------------------------
+  // Top Banner
+  doc.setFillColor(...PRIMARY);
+  doc.rect(0, 0, 210, 110, 'F');
+  
+  // Large Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(36);
+  doc.setTextColor(...WHITE);
+  doc.text('StudyMyte', 20, 45);
+  
+  // Tagline/Subtitle
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(14);
+  doc.setTextColor(224, 231, 255); // Light indigo
+  doc.text('Official Platform User Manual & Contribution Guide', 20, 58);
+  
+  // Accent Bar
+  doc.setFillColor(...SECONDARY);
+  doc.rect(20, 68, 60, 2.5, 'F');
+  
+  // Metadata block in banner
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(10);
+  doc.setTextColor(199, 210, 254);
+  doc.text('Version 1.0.5  |  A4 Practical Ready  |  Active Resource Hub', 20, 85);
+  
+  // Bottom Content: Welcome message and table of contents
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(...TEXT_MAIN);
+  doc.text('Welcome to StudyMyte', 20, 130);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10.5);
+  doc.setTextColor(...TEXT_MAIN);
+  let yPos = 138;
+  const introText = "StudyMyte is a modern, student-centric digital library and study platform. This document serves as your guide to getting the most out of our centralized resource bank, folders directory, and built-in A4 file tools.";
+  yPos = printWrappedText(doc, introText, 20, yPos, 170, 6);
+  
+  // Table of Contents block
+  yPos += 10;
+  doc.setFillColor(248, 250, 252); // light slate gray
+  doc.rect(20, yPos, 170, 68, 'F');
+  doc.rect(20, yPos, 170, 68, 'S'); // border
+  
+  yPos += 8;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(...PRIMARY_DARK);
+  doc.text('TABLE OF CONTENTS', 28, yPos);
+  
+  yPos += 8;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(...TEXT_MAIN);
+  
+  const tocItems = [
+    { page: 'Page 2', title: '1. App Navigation & Core Features (Notes, PYQs, and Resources)' },
+    { page: 'Page 2', title: '2. Built-in Practical File Generators & Scan Filters' },
+    { page: 'Page 3', title: '3. Uploading & Downloading Rules (Students, Teachers, Admins)' },
+    { page: 'Page 3', title: '4. Contribution Leaderboard & Points Structure' },
+    { page: 'Page 4', title: '5. About StudyMyte (Overview, Problems Statement, Solution & Credits)' },
+    { page: 'Page 5', title: '6. User Interface Visual Tour & Screenshot Gallery' }
+  ];
+  
+  tocItems.forEach(item => {
+    doc.text(item.title, 28, yPos);
+    doc.setFont('helvetica', 'bold');
+    doc.text(item.page, 168, yPos);
+    doc.setFont('helvetica', 'normal');
+    yPos += 8;
+  });
+  
+  // ----------------------------------------------------
+  // PAGE 2: FEATURES & TOOLS
+  // ----------------------------------------------------
+  doc.addPage();
+  drawPageTemplate(2, 5);
+  
+  yPos = 25;
+  yPos = drawSectionHeader('1. Core Features & Navigation', 20, yPos);
+  yPos += 2;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.setTextColor(...PRIMARY_DARK);
+  doc.text('Subject-Wise Lecture Notes & PYQs:', 20, yPos);
+  yPos += 5;
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(...TEXT_MAIN);
+  const notesText = "StudyMyte categorizes study materials into notes and previous year question papers. You can select semesters, browse subject folders, like documents for quick reference, and filter files instantly. All files load and view in-browser or download with one tap.";
+  yPos = printWrappedText(doc, notesText, 20, yPos, 170, 5);
+  yPos += 5;
+  
+  yPos = drawSectionHeader('2. Practical File Generators & Tools', 20, yPos);
+  yPos += 2;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(...TEXT_MAIN);
+  const generatorText = "Under \'File Tools\', students can generate custom, A4-ready practical cover pages (Lab Front Pages) and index sheets in PDF format. The platform also offers image-to-PDF compilation, PDF compression, PDF merging/splitting, crop margin guides, and scans grayscale/black-and-white filters.";
+  yPos = printWrappedText(doc, generatorText, 20, yPos, 170, 5);
+  
+  // Embed screenshots side-by-side on page 2
+  yPos += 8;
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...TEXT_MUTED);
+  doc.text('Figure 1: Subject Directories & Resource Categories', 20, yPos);
+  
+  if (imgFolders) {
+    doc.addImage(imgFolders, 'JPEG', 20, yPos + 4, 75, 125);
+  }
+  if (imgResources) {
+    doc.addImage(imgResources, 'JPEG', 115, yPos + 4, 75, 125);
+  }
+  
+  // ----------------------------------------------------
+  // PAGE 3: RULES & GUIDELINES
+  // ----------------------------------------------------
+  doc.addPage();
+  drawPageTemplate(3, 5);
+  
+  yPos = 25;
+  yPos = drawSectionHeader('3. Upload & Download Rules', 20, yPos);
+  yPos += 2;
+  
+  // Rules Box (Student)
+  doc.setFillColor(240, 253, 250); // Emerald 50
+  doc.rect(20, yPos, 90, 48, 'F');
+  doc.rect(20, yPos, 90, 48, 'S');
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(...SECONDARY);
+  doc.text('For Students:', 24, yPos + 6);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...TEXT_MAIN);
+  const studentRules = [
+    "- Only upload high-quality, clear scans of notes, lab manuals, and previous year papers.",
+    "- Contributions do not go live instantly. They require review and approval from a Teacher or Admin.",
+    "- For every successfully approved contribution, you receive 1 point on the Leaderboard.",
+    "- Do not upload copyrighted books, promotional content, or duplicate/corrupt PDFs."
+  ];
+  let subY = yPos + 12;
+  studentRules.forEach(rule => {
+    subY = printWrappedText(doc, rule, 24, subY, 82, 4.5);
+  });
+  yPos += 53;
+  
+  // Rules Box (Teacher/Educator)
+  doc.setFillColor(239, 246, 255); // Blue 50
+  doc.rect(20, yPos, 90, 40, 'F');
+  doc.rect(20, yPos, 90, 40, 'S');
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(...PRIMARY);
+  doc.text('For Teachers (Educators):', 24, yPos + 6);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...TEXT_MAIN);
+  const teacherRules = [
+    "- Uploaded resources go live instantly, bypass review gates, and display with the \'Educator\' label.",
+    "- Access the Educator Dashboard to monitor your resource likes, uploads count, and total page views.",
+    "- Create and manage course folders, simulations, and textbooks."
+  ];
+  subY = yPos + 12;
+  teacherRules.forEach(rule => {
+    subY = printWrappedText(doc, rule, 24, subY, 82, 4.5);
+  });
+  yPos += 45;
+  
+  // Rules Box (Admin)
+  doc.setFillColor(254, 242, 242); // Red 50
+  doc.rect(20, yPos, 90, 40, 'F');
+  doc.rect(20, yPos, 90, 40, 'S');
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(220, 38, 38);
+  doc.text('For Administrators:', 24, yPos + 6);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...TEXT_MAIN);
+  const adminRules = [
+    "- Approve or reject pending student contributions under the approvals panel.",
+    "- Manage the student/educator directories and reset user passwords if needed.",
+    "- Issue server-wide announcements, manage support tickets, and configure app themes."
+  ];
+  subY = yPos + 12;
+  adminRules.forEach(rule => {
+    subY = printWrappedText(doc, rule, 24, subY, 82, 4.5);
+  });
+  yPos += 45;
+  
+  yPos = drawSectionHeader('4. Leaderboard & Contribution Points', 20, yPos);
+  yPos += 2;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(...TEXT_MAIN);
+  const leaderboardText = "Under \'Top Contributors\' page, students are ranked by approved uploads points. Each live upload awards 1 point. While leaderboard names and positions are public to all, detailed uploads count and exact points are visible only to Admins/Superadmins.";
+  yPos = printWrappedText(doc, leaderboardText, 20, yPos, 90, 4.5);
+  
+  // Embed profile view screenshot on right side of Page 3
+  if (imgProfile) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...TEXT_MUTED);
+    doc.text('Figure 2: User Account & Profile Sections', 120, 25);
+    doc.addImage(imgProfile, 'JPEG', 120, 28, 70, 140);
+  }
+  
+  // ----------------------------------------------------
+  // PAGE 4: ABOUT STUDYMYTE (PASTED HTML CONTENT)
+  // ----------------------------------------------------
+  doc.addPage();
+  drawPageTemplate(4, 5);
+  
+  yPos = 25;
+  yPos = drawSectionHeader('5. About StudyMyte', 20, yPos);
+  yPos += 2;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(...PRIMARY_DARK);
+  doc.text('PLATFORM OVERVIEW:', 20, yPos);
+  yPos += 5;
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...TEXT_MAIN);
+  const aboutOverview = "StudyMyte is a modern, student-centric digital library and sharing platform designed to make academic life simpler, more collaborative, and highly efficient. Created specifically for university and college students, StudyMyte serves as a centralized hub where anyone can access, search, and download a wide variety of academic materials. Beyond being a repository, StudyMyte integrates intelligent features to guide students through their academic journey.";
+  yPos = printWrappedText(doc, aboutOverview, 20, yPos, 170, 4.5);
+  yPos += 4;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(...PRIMARY_DARK);
+  doc.text('THE PROBLEM STATEMENT:', 20, yPos);
+  yPos += 5;
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...TEXT_MAIN);
+  const aboutProblem = "Navigating college academics is often harder than it needs to be due to several persistent challenges: Lack of Organized Study Resources: Lecture slides, notes, and study material are usually scattered across different chats, emails, and drives. Students spend valuable time searching for resources instead of studying them. Difficulty Finding PYQs: Previous Year Questions are critical for exam preparation, yet they are rarely cataloged systematically, leaving students guessing about past trends. Lack of Centralized Guidance: Without a single platform, juniors struggle to seek guidance from seniors, leading to a disconnect and unnecessary stress during exams.";
+  yPos = printWrappedText(doc, aboutProblem, 20, yPos, 170, 4.5);
+  yPos += 4;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(...PRIMARY_DARK);
+  doc.text('OUR SOLUTION:', 20, yPos);
+  yPos += 5;
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...TEXT_MAIN);
+  const aboutSolution = "StudyMyte solves these pain points by offering a unified, clean, and accessible portal: One-Click Access: Streamlined storage allows students to access notes and files instantly without jumping between platforms. Systematic Archives: Categorized and semester-wise sorted papers make finding PYQs completely effortless. Organized & Responsive Interface: A user-friendly, responsive Single Page Application (SPA) designed to work beautifully on both desktop and mobile devices. Community-Driven Support: Built by seniors who understand the curriculum, ensuring the resources are always relevant and accurate.";
+  yPos = printWrappedText(doc, aboutSolution, 20, yPos, 170, 4.5);
+  yPos += 4;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(...PRIMARY_DARK);
+  doc.text('OWNERSHIP & ROLES:', 20, yPos);
+  yPos += 5;
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...TEXT_MAIN);
+  doc.text('Ankit Ghugtyal - Founder & Developer', 25, yPos);
+  doc.text('Abhay Chandra Joshi - Content Curator', 25, yPos + 4.5);
+  doc.text('Adarsh Singh Chaudhary - Community Manager', 25, yPos + 9);
+  doc.text('Shreya Tamta - Platform Coordinator', 25, yPos + 13.5);
+  yPos += 20;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(...PRIMARY_DARK);
+  doc.text('HOW TO CONTRIBUTE:', 20, yPos);
+  yPos += 5;
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...TEXT_MAIN);
+  const aboutContribute = "We believe StudyMyte belongs to the student community. If you want to help grow the platform, improve the resources, or fix a bug, here is how you can contribute: Fork the Repository: Create a personal copy of the repository on your GitHub account. Add or Improve Resources: Add high-quality study materials, missing PYQs, or clean lecture notes. Submit a Pull Request: Submit your changes back to the main repository for review. Our team will review and merge it.";
+  yPos = printWrappedText(doc, aboutContribute, 20, yPos, 170, 4.5);
+  
+  // ----------------------------------------------------
+  // PAGE 5: VISUAL TOUR & NOTES VIEW SCREENSHOT
+  // ----------------------------------------------------
+  doc.addPage();
+  drawPageTemplate(5, 5);
+  
+  yPos = 25;
+  yPos = drawSectionHeader('6. User Interface Visual Tour', 20, yPos);
+  yPos += 2;
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(...TEXT_MAIN);
+  const tourText = "Below is the main document listing page where students can view academic papers, likes, and upload details. StudyMyte is fully responsive and adjusts fluidly to provide a native mobile app experience on smaller devices.";
+  yPos = printWrappedText(doc, tourText, 20, yPos, 170, 5);
+  
+  if (imgNotes) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...TEXT_MUTED);
+    doc.text('Figure 3: Document Catalog & Downloads Layout', 65, yPos + 6);
+    doc.addImage(imgNotes, 'JPEG', 65, yPos + 10, 80, 150);
+  }
+  
+  // Open PDF in viewer
+  window.openBlobViewer(doc.output('bloburl'), 'StudyMyte User Manual');
+}
+
+function showAboutModal() {
+  const modal = document.getElementById('modal-about');
+  if (modal) {
+    modal.style.display = 'flex';
+    const closeBtn = document.getElementById('modal-about-close');
+    const footerBtn = document.getElementById('btn-about-close-footer');
+    const closeFn = () => { modal.style.display = 'none'; };
+    if (closeBtn) closeBtn.onclick = closeFn;
+    if (footerBtn) footerBtn.onclick = closeFn;
+    modal.onclick = (e) => { if (e.target === modal) closeFn(); };
+    if (typeof refreshIcons === 'function') refreshIcons();
+  }
+}
+
+// ----------------------------------------------------
+// APPEARANCE & PERSONALIZATION (FONTS & DISPLAY)
+// ----------------------------------------------------
+
+const FONT_STYLES = [
+  { id: 'inter', name: 'Inter', category: 'Clean & Modern (Default)', font: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif" },
+  { id: 'outfit', name: 'Outfit', category: 'Trendy & Geometric', font: "'Outfit', -apple-system, BlinkMacSystemFont, sans-serif" },
+  { id: 'jakarta', name: 'Plus Jakarta Sans', category: 'Sleek & Professional', font: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif" },
+  { id: 'poppins', name: 'Poppins', category: 'Friendly & Rounded', font: "'Poppins', -apple-system, BlinkMacSystemFont, sans-serif" },
+  { id: 'roboto', name: 'Roboto', category: 'Classic & High Legibility', font: "'Roboto', -apple-system, BlinkMacSystemFont, sans-serif" },
+  { id: 'nunito', name: 'Nunito', category: 'Soft & Approachable', font: "'Nunito', -apple-system, BlinkMacSystemFont, sans-serif" },
+  { id: 'lexend', name: 'Lexend', category: 'Optimized for Academic Reading', font: "'Lexend', -apple-system, BlinkMacSystemFont, sans-serif" },
+  { id: 'space', name: 'Space Grotesk', category: 'Tech & Expressive', font: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif" },
+  { id: 'lora', name: 'Lora', category: 'Elegant Academic Serif', font: "'Lora', Georgia, serif" },
+  { id: 'dmsans', name: 'DM Sans', category: 'Minimalist & Crisp', font: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif" }
+];
+
+function clearLegacyColorTheme() {
+  try {
+    localStorage.removeItem('studymyte-color-theme');
+    const root = document.documentElement;
+    root.style.removeProperty('--primary');
+    root.style.removeProperty('--primary-dark');
+    root.style.removeProperty('--primary-light');
+    root.style.removeProperty('--primary-accent');
+    root.style.removeProperty('--primary-rgb');
+    root.style.removeProperty('--primary-glow');
+    root.style.removeProperty('--bg-gradient');
+  } catch (e) {}
+}
+
+function applyFontStyle(fontId, save = true) {
+  const fontObj = FONT_STYLES.find(f => f.id === fontId) || FONT_STYLES[0];
+  const root = document.documentElement;
+  root.style.setProperty('--app-font-family', fontObj.font);
+  document.body.style.fontFamily = fontObj.font;
+  if (save) {
+    localStorage.setItem('studymyte-app-font', fontObj.id);
+  }
+}
+
+function renderAppearanceView() {
+  const fontContainer = document.getElementById('theme-font-list');
+  if (fontContainer) {
+    const activeFontKey = localStorage.getItem('studymyte-app-font') || 'inter';
+
+    // Render 10 Font Styles
+    fontContainer.innerHTML = FONT_STYLES.map(f => {
+      const isActive = (f.id === activeFontKey);
+      return `
+        <div class="font-style-card ${isActive ? 'active' : ''}" onclick="selectFontStyle('${f.id}')">
+          <div style="flex: 1;">
+            <div style="font-weight: 700; font-size: 15px; font-family: ${f.font}; color: var(--text-main);">${f.name}</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px; font-family: ${f.font};">
+              ${f.category} • The quick brown fox jumps over the lazy dog (123)
+            </div>
+          </div>
+          <div style="width: 26px; height: 26px; border-radius: 50%; background: ${isActive ? 'var(--primary)' : 'var(--border-color)'}; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-left: 12px;">
+            ${isActive ? '<i data-lucide="check" style="color: #ffffff; width: 15px; height: 15px;"></i>' : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  const appToggle = document.getElementById('theme-mode-toggle-appearance');
+  if (appToggle) {
+    const isDark = (localStorage.getItem('studymyte-theme-mode') === 'dark');
+    appToggle.checked = isDark;
+    appToggle.onchange = (e) => {
+      setThemeMode(e.target.checked ? 'dark' : 'light', true);
+    };
+  }
+
+  if (typeof refreshIcons === 'function') refreshIcons();
+}
+
+window.selectFontStyle = function(fontId) {
+  applyFontStyle(fontId, true);
+  renderAppearanceView();
+};
+
+function showUserDeviceDetailsModal(u) {
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.style.display = 'flex';
+  modal.style.zIndex = '2000';
+  modal.id = 'modal-user-device-details';
+  
+  const dev = u.deviceInfo || { browser: 'Unknown', os: 'Unknown', deviceType: 'Unknown', deviceModel: 'Unknown', ip: 'Unknown' };
+
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width: 500px; padding: 30px; border-radius: var(--radius-lg); position: relative; text-align: left; background: var(--card-bg); border: 1px solid var(--border-color);">
+      <button class="modal-close" id="modal-user-device-close" style="top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: var(--text-muted); cursor: pointer;">&times;</button>
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 15px;">
+        <div style="width: 45px; height: 45px; border-radius: 50%; background-color: var(--primary-accent); color: var(--primary); display: flex; align-items: center; justify-content: center;">
+          <i data-lucide="shield-alert" style="width: 24px; height: 24px;"></i>
+        </div>
+        <div>
+          <h3 style="color: var(--primary-dark); font-size: 20px; font-weight: 800; margin: 0;">Device & Session Details</h3>
+          <p style="color: var(--text-muted); font-size: 13px; margin: 2px 0 0 0;">User: <strong>${escapeHTML(capitalizeName(u.name))}</strong></p>
+        </div>
+      </div>
+      
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px;">
+          <span style="color: var(--text-muted); font-size: 13px; font-weight: 600;">Last Login</span>
+          <span style="color: var(--text-main); font-size: 13px; font-weight: 700;">${u.lastLogin ? new Date(u.lastLogin).toLocaleString() : 'Never'}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px;">
+          <span style="color: var(--text-muted); font-size: 13px; font-weight: 600;">Last Active</span>
+          <span style="color: var(--text-main); font-size: 13px; font-weight: 700;">${u.lastActive ? new Date(u.lastActive).toLocaleString() : 'Never'}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px;">
+          <span style="color: var(--text-muted); font-size: 13px; font-weight: 600;">Device Type</span>
+          <span style="color: var(--text-main); font-size: 13px; font-weight: 700; text-transform: capitalize;">${escapeHTML(dev.deviceType || 'Unknown')}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px;">
+          <span style="color: var(--text-muted); font-size: 13px; font-weight: 600;">OS Used</span>
+          <span style="color: var(--text-main); font-size: 13px; font-weight: 700;">${escapeHTML(dev.os || 'Unknown')}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px;">
+          <span style="color: var(--text-muted); font-size: 13px; font-weight: 600;">Browser</span>
+          <span style="color: var(--text-main); font-size: 13px; font-weight: 700;">${escapeHTML(dev.browser || 'Unknown')}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px;">
+          <span style="color: var(--text-muted); font-size: 13px; font-weight: 600;">Network User (IP)</span>
+          <span style="color: var(--text-main); font-size: 13px; font-weight: 700;">${escapeHTML(dev.ip || 'Unknown')}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding-bottom: 8px;">
+          <span style="color: var(--text-muted); font-size: 13px; font-weight: 600;">Device Model / Info</span>
+          <span style="color: var(--text-main); font-size: 13px; font-weight: 700;">${escapeHTML(dev.deviceModel || 'N/A')}</span>
+        </div>
+      </div>
+      
+      <button class="btn btn-primary" id="modal-user-device-btn" style="width: 100%; margin-top: 24px; padding: 12px; font-weight: 600;">Close</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  if (window.lucide) window.lucide.createIcons();
+
+  const closeModal = () => {
+    modal.classList.add('fade-out');
+    setTimeout(() => modal.remove(), 250);
+  };
+
+  document.getElementById('modal-user-device-close').addEventListener('click', closeModal);
+  document.getElementById('modal-user-device-btn').addEventListener('click', closeModal);
+}
+
+// 5. ADMIN DASHBOARD VIEW
+async function renderAdminDashboardView(currentHash) {
+  if (!currentHash) {
+    currentHash = window.location.pathname;
+  }
+  if (currentHash.startsWith('#/')) {
+    currentHash = currentHash.slice(1);
+  }
+  currentHash = currentHash.split('?')[0];
+  if (!currentHash.startsWith('/')) {
+    currentHash = '/' + currentHash;
+  }
+  if (!currentHash.startsWith('/admin')) {
+    currentHash = '/admin/approvals';
+  }
+
+  const roleLabel = document.getElementById('admin-panel-role-label');
+  const errorAlert = document.getElementById('admin-error-alert');
+  const pendingCount = document.getElementById('pending-users-count');
+  const pendingContainer = document.getElementById('pending-users-list-container');
+  const allCount = document.getElementById('all-users-count');
+  const allContainer = document.getElementById('all-users-list-container');
+  const directoryHint = document.getElementById('admin-directory-hint');
+  const tabsContainer = document.getElementById('directory-tabs');
+  const subpageTitle = document.getElementById('admin-panel-subpage-title');
+
+  // Set role label
+  if (roleLabel) {
+    roleLabel.textContent = currentUser.role === 'superadmin' ? 'Super Admin' : 'Admin';
+  }
+  if (errorAlert) {
+    errorAlert.style.display = 'none';
+  }
+
+  // Handle visibility of the sub-view containers based on Mobile vs PC viewport
+  const isMobile = window.innerWidth <= 768;
+  const pcSep = subpageTitle ? subpageTitle.previousElementSibling : null;
+
+  if (isMobile) {
+    if (pcSep) pcSep.style.display = 'inline';
+    if (subpageTitle) subpageTitle.style.display = 'inline';
+
+    document.querySelectorAll('.admin-subview').forEach(view => {
+      view.style.display = 'none';
+    });
+
+    if (currentHash === '/admin/approvals') {
+      if (subpageTitle) subpageTitle.textContent = 'Pending Approvals';
+      const view = document.getElementById('admin-section-approvals');
+      if (view) view.style.display = 'block';
+    } else if (currentHash === '/admin/users') {
+      if (subpageTitle) subpageTitle.textContent = 'User Directory';
+      const view = document.getElementById('admin-section-users');
+      if (view) view.style.display = 'block';
+    } else if (currentHash === '/admin/contributions') {
+      if (subpageTitle) subpageTitle.textContent = 'Pending Contributions';
+      const view = document.getElementById('admin-section-contributions');
+      if (view) view.style.display = 'block';
+    } else if (currentHash === '/admin/duplicates') {
+      if (subpageTitle) subpageTitle.textContent = 'Pending Contributions & Duplicates';
+      const view = document.getElementById('admin-section-contributions');
+      if (view) view.style.display = 'block';
+    } else if (currentHash === '/admin/support') {
+      if (subpageTitle) subpageTitle.textContent = 'Help & Support';
+      const view = document.getElementById('admin-section-support');
+      if (view) view.style.display = 'block';
+    } else if (currentHash === '/admin/compose') {
+      if (subpageTitle) subpageTitle.textContent = 'Send Notification';
+      const view = document.getElementById('admin-section-compose-notification');
+      if (view) view.style.display = 'block';
+    } else if (currentHash === '/admin/notifications') {
+      if (subpageTitle) subpageTitle.textContent = 'Sent Notifications';
+      const view = document.getElementById('admin-section-notifications');
+      if (view) view.style.display = 'block';
+    } else if (currentHash === '/admin/reviews') {
+      if (subpageTitle) subpageTitle.textContent = 'User Reviews';
+      const view = document.getElementById('admin-section-reviews');
+      if (view) view.style.display = 'block';
+    }
+  } else {
+    if (pcSep) pcSep.style.display = 'none';
+    if (subpageTitle) subpageTitle.style.display = 'none';
+
+    document.querySelectorAll('.admin-subview').forEach(view => {
+      view.style.display = 'block';
+    });
+  }
+
+  const adminSearchInput = document.getElementById('admin-user-search-input');
+  const adminSearchClearBtn = document.getElementById('btn-admin-user-search-clear');
+  if (adminSearchInput && adminSearchClearBtn) {
+    if (document.activeElement !== adminSearchInput) {
+      adminSearchInput.value = adminUserSearchQuery;
+    }
+    adminSearchClearBtn.style.display = adminUserSearchQuery ? 'flex' : 'none';
+  }
+
+  if (currentUser.role === 'superadmin') {
+    if (directoryHint) directoryHint.textContent = 'Super Admin view: You have full deletion and admin promotion privileges.';
+  } else {
+    if (directoryHint) directoryHint.textContent = 'Admin view: You can manage and delete Student accounts only.';
+  }
+
+  const superadminExportAction = document.getElementById('superadmin-export-users-action');
+  if (superadminExportAction) {
+    superadminExportAction.style.display = (currentUser.role === 'superadmin') ? 'block' : 'none';
+  }
+
+  try {
+    const fetchApprovals = async () => {
+      pendingContainer.innerHTML = getListSkeleton();
+      const pending = await api.getPendingUsers();
+      pendingCount.textContent = pending.length;
+
+      if (pending.length === 0) {
+        pendingContainer.innerHTML = `<div class="empty-state" style="padding: 30px;">No registration requests pending approval.</div>`;
+      } else {
+        pendingContainer.innerHTML = pending.map(u => `
+          <div class="user-card">
+            <div class="user-info">
+              <h5>${escapeHTML(capitalizeName(u.name))}</h5>
+              <p>Phone: ${escapeHTML(u.phone)} &bull; Requested Role: <strong style="text-transform: capitalize; color: var(--primary);">${escapeHTML(u.role)}</strong></p>
+              <p style="font-size: 11px; margin-top: 2px;">Registered: ${new Date(u.createdAt).toLocaleString()}</p>
+            </div>
+            <div class="user-actions">
+              <button class="btn btn-primary btn-sm btn-approve-user" data-id="${u.id}" style="padding: 6px 12px; display: flex; align-items: center; gap: 4px; background-color: var(--success); border: none;">
+                <i data-lucide="user-check" style="width:14px;height:14px;"></i> Approve
+              </button>
+              <button class="btn btn-danger btn-sm btn-reject-user" data-id="${u.id}" style="padding: 6px 12px; display: flex; align-items: center; gap: 4px;">
+                <i data-lucide="user-x" style="width:14px;height:14px;"></i> Reject
+              </button>
+            </div>
+          </div>
+        `).join('');
+
+        document.querySelectorAll('.btn-approve-user').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i>';
+            refreshIcons();
+            try {
+              await api.approveUser(btn.getAttribute('data-id'));
+              await renderAdminDashboardView(currentHash);
+            } catch (err) {
+              alert(err.message || 'Approval failed');
+              btn.disabled = false;
+              btn.innerHTML = originalHTML;
+              refreshIcons();
+            }
+          });
+        });
+
+        document.querySelectorAll('.btn-reject-user').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!confirm('Reject and delete this registration request?')) return;
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i>';
+            refreshIcons();
+            try {
+              await api.rejectUser(btn.getAttribute('data-id'));
+              await renderAdminDashboardView(currentHash);
+            } catch (err) {
+              alert(err.message || 'Rejection failed');
+              btn.disabled = false;
+              btn.innerHTML = originalHTML;
+              refreshIcons();
+            }
+          });
+        });
+      }
+    };
+
+    const fetchUsers = async (forceFetch = false) => {
+      if (forceFetch || !adminUsersCache) {
+        allContainer.innerHTML = getListSkeleton();
+        try {
+          const all = await api.getAllUsers();
+          all.sort((a, b) => {
+            const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+            const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+            return dateB - dateA;
+          });
+          adminUsersCache = all;
+          exportUsersCache = all;
+        } catch (err) {
+          allContainer.innerHTML = `<div class="empty-state" style="color: var(--danger);">Failed to load users: ${escapeHTML(err.message)}</div>`;
+          return;
+        }
+      }
+
+      applyDirectoryFilters();
+    };
+
+    const applyDirectoryFilters = () => {
+      if (!adminUsersCache) return;
+      let filteredUsers = adminUsersCache;
+      if (adminUserSearchQuery && adminUserSearchQuery.trim()) {
+        const q = adminUserSearchQuery.toLowerCase().trim();
+        filteredUsers = adminUsersCache.filter(u => {
+          const name = (u.name || '').toLowerCase();
+          const phone = (u.phone || '').toLowerCase();
+          const email = (u.email || '').toLowerCase();
+          return name.includes(q) || phone.includes(q) || email.includes(q);
+        });
+      }
+
+      allCount.textContent = filteredUsers.length;
+
+      const adminsList = filteredUsers.filter(u => u.role === 'admin' || u.role === 'superadmin');
+      const teachersList = filteredUsers.filter(u => u.role === 'educator');
+      const studentsList = filteredUsers.filter(u => u.role === 'student');
+
+      // Auto-switch tab if current active tab has 0 matches but another category has matches
+      if (adminUserSearchQuery && adminUserSearchQuery.trim()) {
+        if (activeDirectoryTab === 'admin' && adminsList.length === 0) {
+          if (studentsList.length > 0) activeDirectoryTab = 'student';
+          else if (teachersList.length > 0) activeDirectoryTab = 'teacher';
+        } else if (activeDirectoryTab === 'teacher' && teachersList.length === 0) {
+          if (studentsList.length > 0) activeDirectoryTab = 'student';
+          else if (adminsList.length > 0) activeDirectoryTab = 'admin';
+        } else if (activeDirectoryTab === 'student' && studentsList.length === 0) {
+          if (teachersList.length > 0) activeDirectoryTab = 'teacher';
+          else if (adminsList.length > 0) activeDirectoryTab = 'admin';
+        }
+      }
+
+      const renderTabs = () => {
+        const currentCategoryLabel = activeDirectoryTab === 'admin' ? 'Admins' : (activeDirectoryTab === 'teacher' ? 'Teachers' : 'Students');
+        tabsContainer.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button class="calc-tab ${activeDirectoryTab === 'admin' ? 'active' : ''}" id="tab-dir-admin">Admin (${adminsList.length})</button>
+              <button class="calc-tab ${activeDirectoryTab === 'teacher' ? 'active' : ''}" id="tab-dir-teacher">Teachers (${teachersList.length})</button>
+              <button class="calc-tab ${activeDirectoryTab === 'student' ? 'active' : ''}" id="tab-dir-student">Students (${studentsList.length})</button>
+            </div>
+            ${currentUser.role === 'superadmin' ? `
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <button type="button" id="btn-quick-export-tab" class="btn btn-secondary btn-sm" style="display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 6px 12px; border-color: #10b981; color: #059669; background: rgba(16, 185, 129, 0.08); font-weight: 600;" title="Quickly export this filtered category to CSV">
+                  <i data-lucide="download" style="width: 13px; height: 13px;"></i>
+                  <span>Export <strong>${currentCategoryLabel}</strong> CSV</span>
+                </button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+
+        document.getElementById('tab-dir-admin').addEventListener('click', () => { activeDirectoryTab = 'admin'; directoryVisibleCount = 5; updateDirectoryView(); });
+        document.getElementById('tab-dir-teacher').addEventListener('click', () => { activeDirectoryTab = 'teacher'; directoryVisibleCount = 5; updateDirectoryView(); });
+        document.getElementById('tab-dir-student').addEventListener('click', () => { activeDirectoryTab = 'student'; directoryVisibleCount = 5; updateDirectoryView(); });
+
+        const quickExportBtn = document.getElementById('btn-quick-export-tab');
+        if (quickExportBtn) {
+          quickExportBtn.addEventListener('click', () => {
+            const roleForTab = activeDirectoryTab === 'admin' ? 'admins' : (activeDirectoryTab === 'teacher' ? 'educator' : 'student');
+            openExportUsersModal(roleForTab);
+          });
+        }
+      };
+
+      const updateDirectoryView = () => {
+        renderTabs();
+
+        let selectedUsers = [];
+        if (activeDirectoryTab === 'admin') selectedUsers = adminsList;
+        else if (activeDirectoryTab === 'teacher') selectedUsers = teachersList;
+        else if (activeDirectoryTab === 'student') selectedUsers = studentsList;
+
+        if (selectedUsers.length === 0) {
+          allContainer.innerHTML = `<div class="empty-state">No users found in this category.</div>`;
+          const dirShowMoreContainer = document.getElementById('directory-show-more-container');
+          if (dirShowMoreContainer) dirShowMoreContainer.innerHTML = '';
+          refreshIcons();
+          return;
+        }
+
+        const slicedUsers = selectedUsers.slice(0, directoryVisibleCount);
+
+        allContainer.innerHTML = slicedUsers.map(u => {
+          const isPrimarySuperAdmin = u.phone === '8218325600';
+          const canPromote = currentUser.role === 'superadmin' && u.role === 'admin';
+          
+          const canDelete = u.id !== currentUser.id && 
+                            !isPrimarySuperAdmin && 
+                            (currentUser.role === 'superadmin' || (currentUser.role === 'admin' && u.role === 'student'));
+
+          return `
+            <div class="user-card" style="padding: 14px 16px;">
+              <div class="user-info btn-user-details" data-id="${u.id}" style="cursor: pointer;" title="Click to view Device & Session Details">
+                <h5 style="font-size: 15px; display: flex; align-items: center; gap: 6px;">
+                  ${escapeHTML(capitalizeName(u.name))}
+                  ${isPrimarySuperAdmin ? `
+                    <span style="font-size: 10px; background-color: #fee2e2; color: #ef4444; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
+                      Primary Owner
+                    </span>
+                  ` : ''}
+                </h5>
+                <p style="font-size: 12px;">Phone: ${escapeHTML(u.phone)}</p>
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Email: ${u.email ? escapeHTML(u.email) : '<span style="color: #ef4444; font-style: italic; font-weight: 500;">No email linked</span>'}</p>
+                <div style="display: flex; gap: 6px; margin-top: 4px;">
+                  <span class="user-tag" style="margin: 0; padding: 2px 6px; font-size: 10px; background-color: ${u.role === 'superadmin' ? '#fee2e2' : 'var(--primary-accent)'}; color: ${u.role === 'superadmin' ? '#ef4444' : 'var(--primary-dark)'};">
+                    ${u.role === 'superadmin' ? 'Super Admin' : escapeHTML(u.role)}
+                  </span>
+                  <span class="user-tag" style="margin: 0; padding: 2px 6px; font-size: 10px; background-color: ${u.approved ? '#dcfce7' : '#fee2e2'}; color: ${u.approved ? '#166534' : '#991b1b'};">
+                    ${u.approved ? 'Approved' : 'Pending'}
+                  </span>
+                </div>
+              </div>
+              <div class="user-actions" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px;">
+                ${u.role === 'educator' && typeof u.points === 'number' ? `
+                  <span class="user-tag" style="margin: 0 8px 0 0; padding: 4px 10px; font-size: 11px; font-weight: 700; background-color: var(--primary-accent); color: var(--primary-dark);">
+                    ${u.points} pts
+                  </span>
+                ` : ''}
+                ${u.id !== currentUser.id ? `
+                  <button class="btn btn-secondary btn-sm btn-message-user" data-id="${u.id}" data-name="${escapeHTML(capitalizeName(u.name))}" style="margin-right: 8px; font-size: 11px; padding: 4px 10px; display: flex; align-items: center; gap: 3px; background-color: var(--primary-accent); color: var(--primary-dark); border-color: var(--primary-accent);" title="Send Notification Message">
+                    <i data-lucide="bell" style="width: 12px; height: 12px;"></i> Message
+                  </button>
+                  <button class="btn btn-secondary btn-sm btn-admin-edit-email" data-id="${u.id}" data-name="${escapeHTML(capitalizeName(u.name))}" data-phone="${escapeHTML(u.phone)}" data-email="${escapeHTML(u.email || '')}" style="margin-right: 8px; font-size: 11px; padding: 4px 10px; display: flex; align-items: center; gap: 3px; background-color: #ede9fe; color: #6d28d9; border-color: #ddd6fe;" title="Update user email">
+                    <i data-lucide="mail" style="width: 12px; height: 12px;"></i> Edit Email
+                  </button>
+                  <button class="btn btn-secondary btn-sm btn-admin-reset-password" data-id="${u.id}" data-name="${escapeHTML(capitalizeName(u.name))}" style="margin-right: 8px; font-size: 11px; padding: 4px 10px; display: flex; align-items: center; gap: 3px; background-color: #fef08a; color: #854d0e; border-color: #fef08a;" title="Reset user password to 123456">
+                    <i data-lucide="key" style="width: 12px; height: 12px;"></i> Reset Password
+                  </button>
+                ` : ''}
+                ${canPromote ? `
+                  <button class="btn btn-secondary btn-sm btn-promote-admin" data-id="${u.id}" style="margin-right: 8px; font-size: 11px; padding: 4px 10px; display: flex; align-items: center; gap: 3px; background-color: #e0f2fe; color: #0369a1; border-color: #bae6fd;" title="Promote to Super Admin">
+                    <i data-lucide="award" style="width: 12px; height: 12px;"></i> Promote
+                  </button>
+                ` : ''}
+                ${canDelete ? `
+                  <button class="btn btn-danger btn-sm btn-delete-user" data-id="${u.id}" style="padding: 8px; border-radius: 50%;" title="Delete User">
+                    <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        document.querySelectorAll('.btn-promote-admin').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!confirm('Promote this admin to Super Admin? This action gives them absolute permission.')) return;
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 12px; height: 12px;"></i>';
+            refreshIcons();
+            try {
+              const res = await api.promoteUser(btn.getAttribute('data-id'));
+              alert(res.message || 'Successfully promoted user to Super Admin!');
+              await fetchUsers(true);
+            } catch (err) {
+              alert(err.message || 'Promotion failed');
+              btn.disabled = false;
+              btn.innerHTML = originalHTML;
+              refreshIcons();
+            }
+          });
+        });
+
+        document.querySelectorAll('.btn-delete-user').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!confirm('Permanently delete this user account?')) return;
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 12px; height: 12px;"></i>';
+            refreshIcons();
+            try {
+              await api.deleteUser(btn.getAttribute('data-id'));
+              await fetchUsers(true);
+            } catch (err) {
+              alert(err.message || 'Deletion failed');
+              btn.disabled = false;
+              btn.innerHTML = originalHTML;
+              refreshIcons();
+            }
+          });
+        });
+
+        document.querySelectorAll('.btn-message-user').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const userId = btn.getAttribute('data-id');
+            const userName = btn.getAttribute('data-name');
+            
+            const modal = document.getElementById('modal-send-message');
+            const userIdInput = document.getElementById('send-message-user-id');
+            const nameInput = document.getElementById('send-message-recipient-name');
+            const bodyTextarea = document.getElementById('send-message-body');
+            const errAlert = document.getElementById('send-message-error-alert');
+            
+            if (modal && userIdInput && nameInput && bodyTextarea) {
+              errAlert.style.display = 'none';
+              bodyTextarea.value = '';
+              userIdInput.value = userId;
+              nameInput.value = userName;
+              modal.style.display = 'flex';
+              renderMessageTemplates();
+            }
+          });
+        });
+        document.querySelectorAll('.btn-admin-reset-password').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const userName = btn.getAttribute('data-name');
+            const userId = btn.getAttribute('data-id');
+            if (!confirm(`Are you sure you want to reset the password for ${userName} to 123456?`)) return;
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 12px; height: 12px;"></i>';
+            refreshIcons();
+            try {
+              const res = await api.adminResetPassword(userId);
+              alert(res.message || 'Successfully reset password to 123456!');
+            } catch (err) {
+              alert(err.message || 'Failed to reset password');
+            } finally {
+              btn.disabled = false;
+              btn.innerHTML = originalHTML;
+              refreshIcons();
+            }
+          });
+        });
+
+        document.querySelectorAll('.btn-admin-edit-email').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const userId = btn.getAttribute('data-id');
+            const name = btn.getAttribute('data-name');
+            const phone = btn.getAttribute('data-phone');
+            const email = btn.getAttribute('data-email');
+            openAdminEditEmailModal({ userId, phone, name, email });
+          });
+        });
+
+        // Render Show More button for Directory if needed
+        const dirShowMoreContainer = document.getElementById('directory-show-more-container');
+        const dirRemaining = selectedUsers.length - directoryVisibleCount;
+        if (dirShowMoreContainer) {
+          if (dirRemaining > 0) {
+            dirShowMoreContainer.innerHTML = `
+              <button id="btn-directory-show-more" class="btn btn-secondary" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; font-weight: 600;">
+                Show More (${dirRemaining} remaining) <i data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>
+              </button>
+            `;
+            document.getElementById('btn-directory-show-more').addEventListener('click', () => {
+              directoryVisibleCount += 10;
+              updateDirectoryView();
+            });
+          } else {
+            dirShowMoreContainer.innerHTML = '';
+          }
+        }
+
+        // Attach click listeners to user info block for device details modal
+        allContainer.querySelectorAll('.btn-user-details').forEach(el => {
+          el.addEventListener('click', () => {
+            const id = el.getAttribute('data-id');
+            const u = selectedUsers.find(user => user.id === id);
+            if (u) {
+              showUserDeviceDetailsModal(u);
+            }
+          });
+        });
+
+        refreshIcons();
+      };
+
+      updateDirectoryView();
+    };
+
+    window._refreshAdminUserDirectory = fetchUsers;
+
+    const fetchContributions = async () => {
+      await renderPendingContributions();
+    };
+
+    const fetchSupport = async () => {
+      const helpRequestsContainer = document.getElementById('support-requests-list-container');
+      const helpRequestsCount = document.getElementById('support-requests-count');
+
+      if (helpRequestsContainer && helpRequestsCount) {
+        helpRequestsContainer.innerHTML = getListSkeleton();
+
+        try {
+          const tickets = await api.getHelpRequests();
+          helpRequestsCount.textContent = tickets.length;
+
+          if (tickets.length === 0) {
+            helpRequestsContainer.innerHTML = '<div class="empty-state">No support requests submitted yet.</div>';
+            const supportShowMoreContainer = document.getElementById('support-show-more-container');
+            if (supportShowMoreContainer) supportShowMoreContainer.innerHTML = '';
+          } else {
+            const slicedTickets = tickets.slice(0, helpRequestsVisibleCount);
+
+            helpRequestsContainer.innerHTML = slicedTickets.map(t => {
+              const isResolved = t.status === 'resolved';
+              const cardClass = isResolved ? 'status-resolved' : 'status-pending';
+              const badgeClass = isResolved ? 'status-badge-resolved' : 'status-badge-pending';
+              const statusText = isResolved ? 'Resolved' : 'Pending';
+              const statusIcon = isResolved ? 'check-circle' : 'clock';
+              
+              const roleBadge = t.role === 'superadmin' ? 'Super Admin' : (t.role === 'educator' ? 'Educator' : 'Student');
+              
+              return `
+                <div class="ticket-card ${cardClass}">
+                  <div class="ticket-header">
+                    <div class="ticket-user-info">
+                      <h5 style="font-size: 15px; font-weight: 700; color: var(--text-main); margin-bottom: 2px;">${escapeHTML(capitalizeName(t.name))}</h5>
+                      <div class="ticket-user-meta">
+                        <span class="profile-role-badge" style="background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 2px 6px; font-size: 10px; font-weight: 600; text-transform: capitalize;">${roleBadge}</span>
+                        <span>&bull;</span>
+                        <span style="display: flex; align-items: center; gap: 4px;"><i data-lucide="phone" style="width: 12px; height: 12px;"></i> ${escapeHTML(t.phone)}</span>
+                        <span>&bull;</span>
+                        <span style="display: flex; align-items: center; gap: 4px;"><i data-lucide="calendar" style="width: 12px; height: 12px;"></i> ${new Date(t.createdAt).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <span class="ticket-status-badge ${badgeClass}">
+                      <i data-lucide="${statusIcon}" style="width: 14px; height: 14px;"></i> ${statusText}
+                    </span>
+                  </div>
+                  <div class="ticket-subject" style="font-size: 15px; font-weight: 700; color: var(--primary-dark); margin-bottom: 8px;">Subject: ${escapeHTML(t.subject)}</div>
+                  <div class="ticket-message" style="font-size: 14px; color: var(--text-main); background-color: rgba(243, 248, 255, 0.3); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid rgba(30, 86, 160, 0.05); line-height: 1.5; white-space: pre-wrap;">${escapeHTML(t.message)}</div>
+                  ${t.requestedEmail ? `
+                    <div style="margin-top: 10px; padding: 10px 14px; background-color: #fef3c7; border: 1px solid #fde68a; border-radius: 6px; font-size: 13px; color: #92400e; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                      <div style="display: flex; align-items: center; gap: 6px;">
+                        <i data-lucide="mail" style="width: 16px; height: 16px; flex-shrink: 0;"></i>
+                        <span>Requested Email: <strong>${escapeHTML(t.requestedEmail)}</strong></span>
+                      </div>
+                      <button type="button" class="btn btn-sm btn-link-requested-email" data-phone="${escapeHTML(t.phone)}" data-name="${escapeHTML(t.name)}" data-email="${escapeHTML(t.requestedEmail)}" style="font-size: 12px; padding: 4px 10px; background: #d97706; color: #fff; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 600;">
+                        <i data-lucide="link" style="width: 12px; height: 12px;"></i> Link to Account
+                      </button>
+                    </div>
+                  ` : ''}
+                  <div class="ticket-actions" style="display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 14px;">
+                    <button class="btn btn-secondary btn-sm btn-resolve-ticket" data-id="${t.id}" style="padding: 6px 12px; display: flex; align-items: center; gap: 4px;">
+                      ${isResolved ? `
+                        <i data-lucide="clock" style="width: 14px; height: 14px;"></i> Mark Pending
+                      ` : `
+                        <i data-lucide="check-circle" style="width: 14px; height: 14px;"></i> Mark Resolved
+                      `}
+                    </button>
+                    <button class="btn btn-danger btn-sm btn-delete-ticket" data-id="${t.id}" style="padding: 6px 12px; display: flex; align-items: center; gap: 4px;">
+                      <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i> Delete Request
+                    </button>
+                  </div>
+                </div>
+              `;
+            }).join('');
+
+            // Bind resolve handler
+            helpRequestsContainer.querySelectorAll('.btn-resolve-ticket').forEach(btn => {
+              btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-id');
+                const originalHTML = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i> Updating...';
+                refreshIcons();
+                try {
+                  await api.resolveHelpRequest(id);
+                  await renderAdminDashboardView(currentHash);
+                } catch (err) {
+                  alert(err.message || 'Failed to update request');
+                  btn.disabled = false;
+                  btn.innerHTML = originalHTML;
+                  refreshIcons();
+                }
+              });
+            });
+
+            // Bind delete handler
+            helpRequestsContainer.querySelectorAll('.btn-delete-ticket').forEach(btn => {
+              btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-id');
+                if (!confirm('Are you sure you want to permanently delete this help request?')) return;
+                const originalHTML = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i> Deleting...';
+                refreshIcons();
+                try {
+                  await api.deleteHelpRequest(id);
+                  await renderAdminDashboardView(currentHash);
+                } catch (err) {
+                  alert(err.message || 'Failed to delete request');
+                  btn.disabled = false;
+                  btn.innerHTML = originalHTML;
+                  refreshIcons();
+                }
+              });
+            });
+
+            // Bind Link Requested Email handler
+            helpRequestsContainer.querySelectorAll('.btn-link-requested-email').forEach(btn => {
+              btn.addEventListener('click', () => {
+                const phone = btn.getAttribute('data-phone');
+                const name = btn.getAttribute('data-name');
+                const email = btn.getAttribute('data-email');
+                openAdminEditEmailModal({ phone, name, email });
+              });
+            });
+
+            // Render Show More button for Support requests if needed
+            const supportShowMoreContainer = document.getElementById('support-show-more-container');
+            const supportRemaining = tickets.length - helpRequestsVisibleCount;
+            if (supportShowMoreContainer) {
+              if (supportRemaining > 0) {
+                supportShowMoreContainer.innerHTML = `
+                  <button id="btn-support-show-more" class="btn btn-secondary" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; font-weight: 600;">
+                    Show More (${supportRemaining} remaining) <i data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>
+                  </button>
+                `;
+                document.getElementById('btn-support-show-more').addEventListener('click', () => {
+                  helpRequestsVisibleCount += 10;
+                  renderAdminDashboardView(currentHash);
+                });
+              } else {
+                supportShowMoreContainer.innerHTML = '';
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching help requests:', err);
+          helpRequestsContainer.innerHTML = `<div class="empty-state" style="color: var(--danger);">Failed to load support requests: ${escapeHTML(err.message)}</div>`;
+        }
+      }
+    };
+
+    const fetchComposeNotificationUsers = async () => {
+      const composeSection = document.getElementById('admin-section-compose-notification');
+      if ((currentUser.role === 'superadmin' || currentUser.role === 'admin') && composeSection) {
+        
+        // 1. Setup Dropdown behavior
+        const targetSelect = document.getElementById('compose-notification-target');
+        const userSelectContainer = document.getElementById('compose-notification-user-select-container');
+        const userSelect = document.getElementById('compose-notification-user-id');
+        
+        if (targetSelect && userSelectContainer && !targetSelect.dataset.listenerAdded) {
+          targetSelect.dataset.listenerAdded = 'true';
+          targetSelect.addEventListener('change', (e) => {
+            if (e.target.value === 'specific') {
+              userSelectContainer.style.display = 'block';
+              userSelect.setAttribute('required', 'true');
+            } else {
+              userSelectContainer.style.display = 'none';
+              userSelect.removeAttribute('required');
+            }
+          });
+        }
+
+        // 2. Fetch Users for the dropdown
+        if (userSelect && userSelect.options.length <= 1) {
+          try {
+            const users = await api.getAllUsers();
+            const students = users.filter(u => u.role === 'student');
+            
+            // Generate options
+            let optionsHTML = '<option value="">Select a user...</option>';
+            students.sort((a, b) => a.name.localeCompare(b.name)).forEach(u => {
+              optionsHTML += `<option value="${u.id}">${escapeHTML(u.name)} (${escapeHTML(u.phone)})</option>`;
+            });
+            userSelect.innerHTML = optionsHTML;
+          } catch (err) {
+            console.error('Error fetching users for compose dropdown:', err);
+          }
+        }
+
+        // 3. Form Submit Logic
+        const form = document.getElementById('form-compose-notification');
+        if (form && !form.dataset.listenerAdded) {
+          form.dataset.listenerAdded = 'true';
+          form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const target = document.getElementById('compose-notification-target').value;
+            const title = document.getElementById('compose-notification-title').value;
+            const message = document.getElementById('compose-notification-message').value;
+            const btn = form.querySelector('button[type="submit"]');
+
+            const originalBtnHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<div class="loader" style="width: 16px; height: 16px; border-width: 2px;"></div> Sending...';
+
+            try {
+              if (target === 'all') {
+                // Broadcast endpoint
+                await request('/notifications/broadcast', {
+                  method: 'POST',
+                  body: { title, message }
+                });
+                alert('Broadcast notification sent to all users successfully!');
+              } else {
+                // Specific user endpoint
+                const recipientId = document.getElementById('compose-notification-user-id').value;
+                if (!recipientId) throw new Error("Please select a specific user.");
+                
+                await request('/notifications', {
+                  method: 'POST',
+                  body: { recipientId, message }
+                });
+                alert('Notification sent to user successfully!');
+              }
+              
+              form.reset();
+              userSelectContainer.style.display = 'none';
+              // Refresh sent list
+              fetchNotifications();
+            } catch (err) {
+              alert('Failed to send notification: ' + err.message);
+            } finally {
+              btn.disabled = false;
+              btn.innerHTML = originalBtnHTML;
+              refreshIcons();
+            }
+          });
+        }
+      }
+    };
+
+    const fetchNotifications = async (showSkeleton = true) => {
+      const superadminMessagesSection = document.getElementById('admin-section-notifications');
+      const superadminMessagesContainer = document.getElementById('superadmin-messages-list-container');
+      const superadminMessagesCount = document.getElementById('superadmin-messages-count');
+
+      if ((currentUser.role === 'superadmin' || currentUser.role === 'admin') && superadminMessagesSection && superadminMessagesContainer && superadminMessagesCount) {
+        superadminMessagesSection.style.display = 'block';
+        if (showSkeleton) superadminMessagesContainer.innerHTML = getListSkeleton();
+
+        try {
+          const notifications = await api.getAllNotifications();
+          superadminMessagesCount.textContent = notifications.length;
+
+          if (notifications.length === 0) {
+            superadminMessagesContainer.innerHTML = '<div class="empty-state">No notification messages sent yet.</div>';
+            const messagesShowMoreContainer = document.getElementById('messages-show-more-container');
+            if (messagesShowMoreContainer) messagesShowMoreContainer.innerHTML = '';
+          } else {
+            const slicedNotifications = notifications.slice(0, notificationsVisibleCount);
+
+            superadminMessagesContainer.innerHTML = slicedNotifications.map(n => {
+              const seenLabelClass = n.read ? 'status-badge-resolved' : 'status-badge-pending';
+              const seenText = n.read ? 'seen' : 'unseen';
+              const seenIcon = n.read ? 'eye' : 'eye-off';
+              
+              return `
+                <div class="ticket-card" style="border-left: 4px solid ${n.read ? '#10b981' : '#eab308'}; margin-bottom: 12px; padding: 14px 16px;">
+                  <div class="ticket-header" style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <div class="ticket-user-info">
+                      <h5 style="font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 2px;">
+                        To: ${escapeHTML(capitalizeName(n.recipient.name))} (${escapeHTML(n.recipient.phone)})
+                      </h5>
+                      <span style="font-size: 11px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px;">
+                        <i data-lucide="calendar" style="width: 12px; height: 12px;"></i> ${new Date(n.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <span class="ticket-status-badge ${seenLabelClass}" style="text-transform: capitalize; padding: 2px 8px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;">
+                      <i data-lucide="${seenIcon}" style="width: 12px; height: 12px;"></i> ${seenText}
+                    </span>
+                  </div>
+                  <div class="ticket-message" style="font-size: 13px; color: var(--text-main); background-color: rgba(243, 248, 255, 0.3); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid rgba(30, 86, 160, 0.05); line-height: 1.5; white-space: pre-wrap;">${escapeHTML(n.message)}</div>
+                  <div class="ticket-actions" style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 10px;">
+                    ${!n.read ? `
+                      <button class="btn btn-secondary btn-sm btn-edit-notification" data-id="${n.id}" data-raw="${escapeHTML(n.rawMessage)}" style="padding: 4px 10px; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; background-color: #f1f5f9; border-color: #cbd5e1; color: #475569;">
+                        <i data-lucide="edit-2" style="width: 12px; height: 12px;"></i> Edit Message
+                      </button>
+                    ` : ''}
+                    <button class="btn btn-danger btn-sm btn-delete-notification" data-id="${n.id}" style="padding: 4px 10px; display: inline-flex; align-items: center; gap: 4px; font-size: 11px;">
+                      <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i> Delete
+                    </button>
+                  </div>
+                </div>
+              `;
+            }).join('');
+
+            // Bind Edit button click
+            superadminMessagesContainer.querySelectorAll('.btn-edit-notification').forEach(btn => {
+              btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-id');
+                const rawMessage = btn.getAttribute('data-raw');
+                
+                const newMsgBody = prompt('Edit your message body:', rawMessage);
+                if (newMsgBody === null) return; // user cancelled
+                
+                if (!newMsgBody.trim()) {
+                  alert('Message body cannot be empty');
+                  return;
+                }
+
+                const originalHTML = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = 'Saving...';
+
+                try {
+                  await api.updateNotification(id, newMsgBody.trim());
+                  await fetchNotifications(false);
+                } catch (err) {
+                  alert(err.message || 'Failed to update message');
+                  btn.disabled = false;
+                  btn.innerHTML = originalHTML;
+                  refreshIcons();
+                }
+              });
+            });
+
+            // Bind Delete button click
+            superadminMessagesContainer.querySelectorAll('.btn-delete-notification').forEach(btn => {
+              btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-id');
+                if (!confirm('Are you sure you want to delete this message?')) return;
+                
+                const originalHTML = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 12px; height: 12px;"></i> Deleting...';
+                refreshIcons();
+
+                try {
+                  await api.deleteNotification(id);
+                  const ticketCard = btn.closest('.ticket-card');
+                  if (ticketCard) {
+                    ticketCard.style.transition = 'opacity 0.25s ease, transform 0.25s ease, max-height 0.3s ease, margin 0.3s ease, padding 0.3s ease';
+                    ticketCard.style.opacity = '0';
+                    ticketCard.style.transform = 'translateY(-8px)';
+                    ticketCard.style.maxHeight = ticketCard.offsetHeight + 'px';
+                    setTimeout(() => {
+                      ticketCard.style.maxHeight = '0';
+                      ticketCard.style.margin = '0';
+                      ticketCard.style.padding = '0';
+                      ticketCard.style.border = 'none';
+                      setTimeout(() => {
+                        ticketCard.remove();
+                        const remainingCards = superadminMessagesContainer.querySelectorAll('.ticket-card');
+                        if (superadminMessagesCount) {
+                          const currentCount = parseInt(superadminMessagesCount.textContent || '1', 10);
+                          superadminMessagesCount.textContent = Math.max(0, currentCount - 1);
+                        }
+                        if (remainingCards.length === 0) {
+                          superadminMessagesContainer.innerHTML = '<div class="empty-state">No notification messages sent yet.</div>';
+                          const messagesShowMoreContainer = document.getElementById('messages-show-more-container');
+                          if (messagesShowMoreContainer) messagesShowMoreContainer.innerHTML = '';
+                        }
+                      }, 200);
+                    }, 50);
+                  } else {
+                    await fetchNotifications(false);
+                  }
+                } catch (err) {
+                  alert(err.message || 'Failed to delete message');
+                  btn.disabled = false;
+                  btn.innerHTML = originalHTML;
+                  refreshIcons();
+                }
+              });
+            });
+
+            // Render Show More button for Sent notifications if needed
+            const messagesShowMoreContainer = document.getElementById('messages-show-more-container');
+            const messagesRemaining = notifications.length - notificationsVisibleCount;
+            if (messagesShowMoreContainer) {
+              if (messagesRemaining > 0) {
+                messagesShowMoreContainer.innerHTML = `
+                  <button id="btn-messages-show-more" class="btn btn-secondary" style="display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; font-weight: 600;">
+                    Show More (${messagesRemaining} remaining) <i data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>
+                  </button>
+                `;
+                document.getElementById('btn-messages-show-more').addEventListener('click', () => {
+                  notificationsVisibleCount += 10;
+                  fetchNotifications(false);
+                });
+              } else {
+                messagesShowMoreContainer.innerHTML = '';
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching sent notifications:', err);
+          superadminMessagesContainer.innerHTML = `<div class="empty-state" style="color: var(--danger);">Failed to load sent notifications: ${escapeHTML(err.message)}</div>`;
+        }
+      } else if (superadminMessagesSection) {
+        superadminMessagesSection.style.display = 'none';
+        const messagesShowMoreContainer = document.getElementById('messages-show-more-container');
+        if (messagesShowMoreContainer) messagesShowMoreContainer.innerHTML = '';
+      }
+    };
+
+    const fetchReviews = async () => {
+      const reviewsContainer = document.getElementById('admin-reviews-list-container');
+      const reviewsCount = document.getElementById('admin-reviews-count');
+      const reviewsAverage = document.getElementById('admin-reviews-average');
+
+      if (reviewsContainer && reviewsCount && reviewsAverage) {
+        reviewsContainer.innerHTML = getListSkeleton();
+
+        try {
+          const reviews = await api.getAllReviews();
+          reviewsCount.textContent = reviews.length;
+
+          if (reviews.length === 0) {
+            reviewsAverage.textContent = '0.0';
+            reviewsContainer.innerHTML = '<div class="empty-state">No reviews submitted yet.</div>';
+            const reviewsShowMoreContainer = document.getElementById('reviews-show-more-container');
+            if (reviewsShowMoreContainer) reviewsShowMoreContainer.innerHTML = '';
+          } else {
+            // Calculate average
+            const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
+            const avg = (sum / reviews.length).toFixed(1);
+            reviewsAverage.textContent = avg;
+
+            // Support show-more pagination for reviews
+            const slicedReviews = reviews.slice(0, reviewsVisibleCount);
+
+            reviewsContainer.innerHTML = slicedReviews.map(r => {
+              let starsHTML = '';
+              for (let i = 1; i <= 5; i++) {
+                const color = i <= r.rating ? 'var(--warning)' : '#cbd5e1';
+                const fill = i <= r.rating ? 'var(--warning)' : 'none';
+                starsHTML += `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="${fill}" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+              }
+
+              return `
+                <div class="ticket-card" style="border-left: 5px solid ${r.rating >= 4 ? 'var(--success)' : (r.rating <= 2 ? 'var(--danger)' : 'var(--warning)')}; margin-bottom: 12px; padding: 14px 16px;">
+                  <div class="ticket-header" style="border-bottom: 1px dashed var(--border-color); padding-bottom: 12px; margin-bottom: 14px;">
+                    <div class="ticket-user-info">
+                      <h5 style="font-size: 15px; font-weight: 700; color: var(--text-main); margin-bottom: 2px;">${escapeHTML(capitalizeName(r.name))}</h5>
+                      <div class="ticket-user-meta" style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted);">
+                        <span style="display: flex; align-items: center; gap: 4px;"><i data-lucide="calendar" style="width: 12px; height: 12px;"></i> ${new Date(r.createdAt).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <div style="display: flex; gap: 2px;">
+                      ${starsHTML}
+                    </div>
+                  </div>
+                  <div class="ticket-message" style="font-size: 14px; color: var(--text-main); background-color: rgba(243, 248, 255, 0.3); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid rgba(30, 86, 160, 0.05); line-height: 1.5; white-space: pre-wrap; margin-top: 4px;">${escapeHTML(r.comment) || '<span style="font-style: italic; color: var(--text-muted);">No comment review left.</span>'}</div>
+                  <div class="ticket-actions" style="display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 14px;">
+                    <button class="btn btn-danger btn-sm btn-delete-review" data-id="${r.id}" style="padding: 6px 12px; display: flex; align-items: center; gap: 4px;">
+                      <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i> Delete Review
+                    </button>
+                  </div>
+                </div>
+              `;
+            }).join('');
+
+            // Bind delete review handler
+            reviewsContainer.querySelectorAll('.btn-delete-review').forEach(btn => {
+              btn.addEventListener('click', async () => {
+                if (!confirm('Permanently delete this user review?')) return;
+                const id = btn.getAttribute('data-id');
+                const originalHTML = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i> Deleting...';
+                refreshIcons();
+                try {
+                  await api.deleteReview(id);
+                  await renderAdminDashboardView(currentHash);
+                } catch (err) {
+                  alert(err.message || 'Deletion failed');
+                  btn.disabled = false;
+                  btn.innerHTML = originalHTML;
+                  refreshIcons();
+                }
+              });
+            });
+
+            // Render show-more pagination button
+            const reviewsShowMoreContainer = document.getElementById('reviews-show-more-container');
+            if (reviewsShowMoreContainer) {
+              const reviewsRemaining = reviews.length - reviewsVisibleCount;
+              if (reviewsRemaining > 0) {
+                reviewsShowMoreContainer.innerHTML = `
+                  <button id="btn-reviews-show-more" class="btn btn-secondary btn-sm" style="padding: 8px 16px;">
+                    Show More Reviews (${reviewsRemaining} remaining)
+                  </button>
+                `;
+                document.getElementById('btn-reviews-show-more').addEventListener('click', async () => {
+                  reviewsVisibleCount += 10;
+                  await renderAdminDashboardView(currentHash);
+                });
+              } else {
+                reviewsShowMoreContainer.innerHTML = '';
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Load reviews view error:', err);
+          reviewsContainer.innerHTML = `<div class="alert alert-danger">Error loading reviews: ${err.message}</div>`;
+        }
+      }
+    };
+
+    // Execute fetches depending on isMobile vs Desktop View
+    if (!isMobile) {
+      // Desktop: Fetch and display EVERYTHING in parallel
+      await Promise.all([
+        fetchApprovals(),
+        fetchUsers(),
+        fetchContributions(),
+        fetchSupport(),
+        fetchComposeNotificationUsers(),
+        fetchNotifications(),
+        fetchReviews()
+      ]);
+    } else {
+      // Mobile: Fetch ONLY the active section's data
+      if (currentHash === '/admin/approvals') {
+        await fetchApprovals();
+      } else if (currentHash === '/admin/users') {
+        await fetchUsers();
+      } else if (currentHash === '/admin/contributions' || currentHash === '/admin/duplicates') {
+        await fetchContributions();
+      } else if (currentHash === '/admin/support') {
+        await fetchSupport();
+      } else if (currentHash === '/admin/compose') {
+        await fetchComposeNotificationUsers();
+      } else if (currentHash === '/admin/notifications') {
+        await fetchNotifications();
+      } else if (currentHash === '/admin/reviews') {
+        await fetchReviews();
+      }
+    }
+
+    // Scroll to query-params (only on PC / Desktop)
+    if (!isMobile) {
+      setTimeout(() => {
+        const params = getHashQueryParams();
+        if (params.tab === 'users') {
+          const directorySection = document.getElementById('admin-user-search-input');
+          if (directorySection) directorySection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else if (params.tab === 'pending') {
+          const pendingSection = document.getElementById('pending-users-list-container');
+          if (pendingSection) pendingSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else if (params.tab === 'compose') {
+          const composeSection = document.getElementById('admin-section-compose-notification');
+          if (composeSection) composeSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else if (params.tab === 'reviews') {
+          const reviewsSection = document.getElementById('admin-reviews-list-container');
+          if (reviewsSection) reviewsSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else if (params.tab === 'duplicates' || params.tab === 'contributions') {
+          const contSection = document.getElementById('admin-section-contributions');
+          if (contSection) contSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 150);
+    }
+
+    refreshIcons();
+  } catch (err) {
+    errorAlert.textContent = err.message || 'Failed to load control panel directory';
+    errorAlert.style.display = 'block';
+  }
+}
+
+// --- MODAL UTILITIES ---
+
+function closeAllModals() {
+  document.getElementById('modal-folder').style.display = 'none';
+  document.getElementById('modal-upload').style.display = 'none';
+  if (document.getElementById('modal-edit-document')) document.getElementById('modal-edit-document').style.display = 'none';
+  if (document.getElementById('modal-move-document')) document.getElementById('modal-move-document').style.display = 'none';
+  if (document.getElementById('modal-shift-item')) document.getElementById('modal-shift-item').style.display = 'none';
+  if (document.getElementById('modal-send-message')) document.getElementById('modal-send-message').style.display = 'none';
+  if (document.getElementById('modal-view-notification')) document.getElementById('modal-view-notification').style.display = 'none';
+  if (document.getElementById('modal-export-users')) document.getElementById('modal-export-users').style.display = 'none';
+
+  // Stop active camera stream if any
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(track => track.stop());
+    cameraStream = null;
+  }
+  const streamWrapper = document.getElementById('scan-camera-stream-wrapper');
+  const galleryWrapper = document.getElementById('scan-gallery-and-actions');
+  if (streamWrapper) streamWrapper.style.display = 'none';
+  if (galleryWrapper) galleryWrapper.style.display = 'block';
+}
+
+function openFolderModal(sectionType, folderId = '', folderName = '', parentId = null) {
+  document.getElementById('modal-folder-id').value = folderId;
+  document.getElementById('modal-folder-section-type').value = sectionType;
+  document.getElementById('modal-folder-name').value = folderName;
+  // Store parentId for nested folder creation
+  let parentInput = document.getElementById('modal-folder-parent-id');
+  if (!parentInput) {
+    parentInput = document.createElement('input');
+    parentInput.type = 'hidden';
+    parentInput.id = 'modal-folder-parent-id';
+    document.getElementById('modal-folder-id').parentNode.appendChild(parentInput);
+  }
+  parentInput.value = parentId || '';
+  
+  const title = document.getElementById('modal-folder-title');
+  if (folderId) {
+    title.textContent = 'Rename Folder';
+  } else if (parentId) {
+    title.textContent = 'Add New Folder';
+  } else {
+    title.textContent = 'Add Year Folder';
+  }
+
+  document.getElementById('modal-folder').style.display = 'flex';
+  document.getElementById('modal-folder-name').focus();
+}
+
+
+// Compress image client side using Canvas to Jpeg 0.7
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const img = new Image();
+      img.onload = function() {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1200;
+        
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        resolve({
+          dataUrl,
+          width,
+          height
+        });
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderScanPreviewGallery() {
+  const gallery = document.getElementById('scan-preview-gallery');
+  const container = document.getElementById('scan-preview-container');
+  const btnClear = document.getElementById('btn-scan-clear');
+  
+  if (!gallery) return;
+  
+  gallery.innerHTML = '';
+  
+  if (scanImages.length === 0) {
+    if (container) container.style.display = 'none';
+    if (btnClear) btnClear.style.display = 'none';
+    return;
+  }
+  
+  if (container) container.style.display = 'block';
+  if (btnClear) btnClear.style.display = 'inline-block';
+  
+  scanImages.forEach((img, idx) => {
+    const item = document.createElement('div');
+    item.className = 'scan-thumbnail-item';
+    item.style.cssText = 'position: relative; border-radius: var(--radius-sm); border: 1px solid var(--border-color); overflow: hidden; aspect-ratio: 3/4; display: flex; flex-direction: column; background: #000; box-shadow: var(--shadow-sm);';
+    
+    item.innerHTML = `
+      <img src="${img.dataUrl}" class="scan-thumbnail-img" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.9;" />
+      <div class="scan-thumb-controls" style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); display: flex; justify-content: space-between; align-items: center; padding: 4px; z-index: 2;">
+        <button type="button" class="thumb-control-btn btn-left" style="background: none; border: none; color: #fff; padding: 2px; cursor: pointer; display: flex; align-items: center; opacity: ${idx === 0 ? 0.3 : 1};" ${idx === 0 ? 'disabled' : ''}>
+          <i data-lucide="arrow-left" style="width: 14px; height: 14px;"></i>
+        </button>
+        <span class="thumb-page-num" style="color: #fff; font-size: 10px; font-weight: bold;">P. ${idx + 1}</span>
+        <button type="button" class="thumb-control-btn btn-right" style="background: none; border: none; color: #fff; padding: 2px; cursor: pointer; display: flex; align-items: center; opacity: ${idx === scanImages.length - 1 ? 0.3 : 1};" ${idx === scanImages.length - 1 ? 'disabled' : ''}>
+          <i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
+        </button>
+      </div>
+      <button type="button" class="thumb-edit-btn" style="position: absolute; top: 4px; left: 4px; background: rgba(37, 99, 235, 0.9); border: none; color: #fff; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2; padding: 0;">
+        <i data-lucide="pencil" style="width: 12px; height: 12px;"></i>
+      </button>
+      <button type="button" class="thumb-delete-btn" style="position: absolute; top: 4px; right: 4px; background: rgba(239, 68, 68, 0.9); border: none; color: #fff; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2; padding: 0;">
+        <i data-lucide="x" style="width: 12px; height: 12px;"></i>
+      </button>
+    `;
+    
+    item.querySelector('.btn-left').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (idx > 0) {
+        const temp = scanImages[idx];
+        scanImages[idx] = scanImages[idx - 1];
+        scanImages[idx - 1] = temp;
+        renderScanPreviewGallery();
+      }
+    });
+    
+    item.querySelector('.btn-right').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (idx < scanImages.length - 1) {
+        const temp = scanImages[idx];
+        scanImages[idx] = scanImages[idx + 1];
+        scanImages[idx + 1] = temp;
+        renderScanPreviewGallery();
+      }
+    });
+
+    item.querySelector('.thumb-edit-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      loadEditor(idx);
+    });
+    
+    item.querySelector('.thumb-delete-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      scanImages.splice(idx, 1);
+      renderScanPreviewGallery();
+    });
+    
+    gallery.appendChild(item);
+  });
+  
+  if (window.lucide) {
+    window.refreshIcons();
+  }
+}
+
+// --- SCAN IMAGE EDITOR UTILITIES ---
+
+function updateSliderLabels() {
+  document.getElementById('val-crop-left').textContent = document.getElementById('range-crop-left').value;
+  document.getElementById('val-crop-right').textContent = document.getElementById('range-crop-right').value;
+  document.getElementById('val-crop-top').textContent = document.getElementById('range-crop-top').value;
+  document.getElementById('val-crop-bottom').textContent = document.getElementById('range-crop-bottom').value;
+}
+
+function drawEditorCanvas(applyCrop = false) {
+  const canvas = document.getElementById('editor-canvas');
+  if (!canvas) return;
+  
+  const ctx = canvas.getContext('2d');
+  const origW = editorImg.width;
+  const origH = editorImg.height;
+  
+  // Crop parameters (fractions of original size)
+  const cL = parseFloat(document.getElementById('range-crop-left').value) / 100;
+  const cR = parseFloat(document.getElementById('range-crop-right').value) / 100;
+  const cT = parseFloat(document.getElementById('range-crop-top').value) / 100;
+  const cB = parseFloat(document.getElementById('range-crop-bottom').value) / 100;
+  
+  // Crop bounds on original image
+  const cropX = origW * cL;
+  const cropY = origH * cT;
+  const cropW = origW * (1 - cL - cR);
+  const cropH = origH * (1 - cT - cB);
+  
+  // Set dimensions based on rotation
+  const is90or270 = (editorRotation === 90 || editorRotation === 270);
+  const renderW = applyCrop ? cropW : origW;
+  const renderH = applyCrop ? cropH : origH;
+  
+  canvas.width = is90or270 ? renderH : renderW;
+  canvas.height = is90or270 ? renderW : renderH;
+  
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Translate and rotate around center
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate((editorRotation * Math.PI) / 180);
+  
+  const drawW = applyCrop ? cropW : origW;
+  const drawH = applyCrop ? cropH : origH;
+  const drawX = applyCrop ? cropX : 0;
+  const drawY = applyCrop ? cropY : 0;
+  
+  ctx.drawImage(
+    editorImg,
+    drawX, drawY, drawW, drawH,
+    -renderW / 2, -renderH / 2, renderW, renderH
+  );
+  
+  ctx.restore();
+  
+  // Apply image filters (B&W or grayscale)
+  if (editorFilter === 'gray' || editorFilter === 'bw') {
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imgData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i+1];
+      const b = data[i+2];
+      let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+      
+      if (editorFilter === 'bw') {
+        // High-contrast document scanner filter threshold
+        gray = (gray > 120) ? 255 : 0;
+      }
+      
+      data[i] = gray;
+      data[i+1] = gray;
+      data[i+2] = gray;
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }
+  
+  // Draw crop guides overlay if not compiling final cropped image
+  if (!applyCrop && (cL > 0 || cR > 0 || cT > 0 || cB > 0)) {
+    ctx.save();
+    
+    // Transform coordinates back to current rotation space to draw overlay
+    if (editorRotation === 90) {
+      ctx.translate(canvas.width, 0);
+      ctx.rotate((90 * Math.PI) / 180);
+    } else if (editorRotation === 180) {
+      ctx.translate(canvas.width, canvas.height);
+      ctx.rotate((180 * Math.PI) / 180);
+    } else if (editorRotation === 270) {
+      ctx.translate(0, canvas.height);
+      ctx.rotate((270 * Math.PI) / 180);
+    }
+    
+    // Draw Guidelines
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(cropX, cropY, cropW, cropH);
+    
+    // Darken cropped margins
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
+    // Top
+    ctx.fillRect(0, 0, origW, cropY);
+    // Bottom
+    ctx.fillRect(0, cropY + cropH, origW, origH - cropY - cropH);
+    // Left
+    ctx.fillRect(0, cropY, cropX, cropH);
+    // Right
+    ctx.fillRect(cropX + cropW, cropY, origW - cropX - cropW, cropH);
+    
+    ctx.restore();
+  }
+}
+
+function loadEditor(idx) {
+  editingIndex = idx;
+  editorRotation = 0;
+  editorFilter = 'original';
+  
+  // Reset crop sliders
+  document.getElementById('range-crop-left').value = 0;
+  document.getElementById('range-crop-right').value = 0;
+  document.getElementById('range-crop-top').value = 0;
+  document.getElementById('range-crop-bottom').value = 0;
+  updateSliderLabels();
+  
+  // Show loading indicator or block UI
+  editorImg.onload = function() {
+    drawEditorCanvas();
+    const modal = document.getElementById('modal-image-editor');
+    if (modal) modal.style.display = 'flex';
+  };
+  editorImg.src = scanImages[idx].dataUrl;
+}
+
+// Initializing event listeners for the editor
+function initEditorEventHandlers() {
+  const btnRotate = document.getElementById('btn-editor-rotate');
+  const btnFilterBw = document.getElementById('btn-editor-filter-bw');
+  const btnFilterGray = document.getElementById('btn-editor-filter-gray');
+  const btnReset = document.getElementById('btn-editor-reset');
+  const btnSave = document.getElementById('btn-editor-save');
+  const btnCancel = document.getElementById('modal-image-editor-cancel');
+  const btnClose = document.getElementById('modal-image-editor-close');
+  
+  const sliders = [
+    'range-crop-left',
+    'range-crop-right',
+    'range-crop-top',
+    'range-crop-bottom'
+  ];
+
+  if (btnRotate) {
+    btnRotate.addEventListener('click', () => {
+      editorRotation = (editorRotation + 90) % 360;
+      drawEditorCanvas();
+    });
+  }
+
+  if (btnFilterBw) {
+    btnFilterBw.addEventListener('click', () => {
+      editorFilter = (editorFilter === 'bw') ? 'original' : 'bw';
+      drawEditorCanvas();
+    });
+  }
+
+  if (btnFilterGray) {
+    btnFilterGray.addEventListener('click', () => {
+      editorFilter = (editorFilter === 'gray') ? 'original' : 'gray';
+      drawEditorCanvas();
+    });
+  }
+
+  if (btnReset) {
+    btnReset.addEventListener('click', () => {
+      editorRotation = 0;
+      editorFilter = 'original';
+      sliders.forEach(id => {
+        document.getElementById(id).value = 0;
+      });
+      updateSliderLabels();
+      drawEditorCanvas();
+    });
+  }
+
+  sliders.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('input', () => {
+        updateSliderLabels();
+        drawEditorCanvas();
+      });
+    }
+  });
+
+  const closeEditorModal = () => {
+    const modal = document.getElementById('modal-image-editor');
+    if (modal) modal.style.display = 'none';
+  };
+
+  if (btnCancel) btnCancel.addEventListener('click', closeEditorModal);
+  if (btnClose) btnClose.addEventListener('click', closeEditorModal);
+
+  if (btnSave) {
+    btnSave.addEventListener('click', () => {
+      // Compile canvas output with crop applied
+      drawEditorCanvas(true);
+      const canvas = document.getElementById('editor-canvas');
+      if (canvas && editingIndex !== null) {
+        const finalDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        scanImages[editingIndex] = {
+          dataUrl: finalDataUrl,
+          width: canvas.width,
+          height: canvas.height
+        };
+        closeEditorModal();
+        renderScanPreviewGallery();
+      }
+    });
+  }
+}
+
+function openUploadModal(docType, folderId = null, folderName = '') {
+  document.getElementById('upload-error-alert').style.display = 'none';
+  document.getElementById('upload-section-type').value = docType;
+  document.getElementById('upload-folder-id').value = folderId || '';
+  document.getElementById('upload-folder-name').value = folderName;
+  
+  const titleEl = document.getElementById('modal-upload-title');
+  const subjectDisplayGroup = document.getElementById('upload-subject-display-group');
+  const subjectDisplayInp = document.getElementById('upload-doc-subject-display');
+  const syllabusGroup = document.getElementById('upload-syllabus-subject-group');
+  
+  // Set upload title heading
+  if (docType === 'notes') {
+    titleEl.textContent = 'Upload Notes PDF';
+    subjectDisplayGroup.style.display = 'block';
+    subjectDisplayInp.value = folderName;
+    syllabusGroup.style.display = 'none';
+  } else if (docType === 'paper') {
+    titleEl.textContent = 'Upload Previous Year Paper (PYQ) PDF';
+    subjectDisplayGroup.style.display = 'block';
+    subjectDisplayInp.value = folderName;
+    syllabusGroup.style.display = 'none';
+  } else if (docType === 'lab_manual') {
+    titleEl.textContent = 'Upload Lab Manual PDF';
+    subjectDisplayGroup.style.display = 'block';
+    subjectDisplayInp.value = folderName;
+    syllabusGroup.style.display = 'none';
+  } else if (docType === 'book') {
+    titleEl.textContent = 'Upload Book PDF';
+    subjectDisplayGroup.style.display = 'block';
+    subjectDisplayInp.value = folderName;
+    syllabusGroup.style.display = 'none';
+  } else if (docType === 'competitive') {
+    titleEl.textContent = 'Upload Competitive Exam PYQ PDF';
+    subjectDisplayGroup.style.display = 'block';
+    subjectDisplayInp.value = folderName;
+    syllabusGroup.style.display = 'none';
+  } else if (docType === 'simulation' || docType === 'roadmap') {
+    titleEl.textContent = 'Upload Simulation File / PDF';
+    subjectDisplayGroup.style.display = 'block';
+    subjectDisplayInp.value = folderName;
+    syllabusGroup.style.display = 'none';
+  } else if (docType === 'syllabus') {
+    titleEl.textContent = 'Upload Syllabus PDF';
+    subjectDisplayGroup.style.display = 'none';
+    syllabusGroup.style.display = 'block';
+    
+    // Load Note Folders to populate syllabus subject tag drop down
+    const selectEl = document.getElementById('upload-syllabus-subject-select');
+    selectEl.innerHTML = '<option value="Syllabus">General Syllabus</option>';
+    notesFoldersList.forEach(n => {
+      selectEl.innerHTML += `<option value="${escapeHTML(n.name)}">${escapeHTML(n.name)}</option>`;
+    });
+  }
+
+  // Reset upload source mode and UI tabs
+  uploadSourceMode = 'file';
+  const tabFileEl = document.getElementById('tab-upload-file');
+  const tabLinkEl = document.getElementById('tab-upload-link');
+  const tabScanEl = document.getElementById('tab-upload-scan');
+  if (tabFileEl) tabFileEl.classList.add('active');
+  if (tabLinkEl) tabLinkEl.classList.remove('active');
+  if (tabScanEl) tabScanEl.classList.remove('active');
+  
+  const groupFileEl = document.getElementById('group-upload-file');
+  const groupLinkEl = document.getElementById('group-upload-link');
+  const groupScanEl = document.getElementById('group-upload-scan');
+  if (groupFileEl) groupFileEl.style.display = 'block';
+  if (groupLinkEl) groupLinkEl.style.display = 'none';
+  if (groupScanEl) groupScanEl.style.display = 'none';
+  
+  const linkInputEl = document.getElementById('upload-link-input');
+  if (linkInputEl) linkInputEl.value = '';
+
+  // Clear file inputs
+  document.getElementById('upload-doc-title').value = '';
+  document.getElementById('upload-file-input').value = '';
+  document.getElementById('upload-file-label').textContent = 'Click to browse files';
+  
+  const scanCameraInput = document.getElementById('scan-camera-input');
+  const scanGalleryInput = document.getElementById('scan-gallery-input');
+  if (scanCameraInput) scanCameraInput.value = '';
+  if (scanGalleryInput) scanGalleryInput.value = '';
+  scanImages = [];
+  renderScanPreviewGallery();
+  
+  document.getElementById('modal-upload').style.display = 'flex';
+}
+
+// --- MY UPLOADS VIEW RENDERER ---
+async function renderMyUploadsView() {
+  const container = document.getElementById('my-uploads-list-container');
+  if (!container) return;
+
+  container.innerHTML = getListSkeleton();
+
+  try {
+    myUploadsDocsList = await api.getMyUploads();
+
+    const uploadsCountEl = document.getElementById('stats-uploads-count');
+    const uploadsLikesEl = document.getElementById('stats-uploads-likes');
+    
+    if (uploadsCountEl) {
+      uploadsCountEl.textContent = myUploadsDocsList.length;
+    }
+    if (uploadsLikesEl) {
+      let totalLikes = 0;
+      myUploadsDocsList.forEach(doc => {
+        totalLikes += doc.likesCount || 0;
+      });
+      uploadsLikesEl.textContent = totalLikes;
+    }
+
+    renderFilteredMyUploads();
+  } catch (err) {
+    console.error('Error loading my uploads:', err);
+    container.innerHTML = `<div class="empty-state" style="color: var(--danger);">Failed to load uploaded documents: ${escapeHTML(err.message)}</div>`;
+  }
+}
+
+function renderFilteredMyUploads() {
+  const container = document.getElementById('my-uploads-list-container');
+  if (!container) return;
+
+  const searchInput = document.getElementById('my-uploads-search');
+  const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+  const filtered = myUploadsDocsList.filter(doc => {
+    const title = doc.title || '';
+    const subject = doc.subject || '';
+    const type = doc.type || '';
+    return title.toLowerCase().includes(query) || 
+           subject.toLowerCase().includes(query) ||
+           type.toLowerCase().includes(query);
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <p>${query ? 'No matching documents found.' : 'You have not uploaded any documents yet.'}</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="docs-list">
+      ${filtered.map(doc => {
+        let displayType = doc.type;
+        if (doc.type === 'notes') displayType = 'Note';
+        else if (doc.type === 'paper') displayType = 'PYQ/Paper';
+        else if (doc.type === 'lab_manual') displayType = 'Lab Manual';
+        else if (doc.type === 'book') displayType = 'Book';
+        else if (doc.type === 'syllabus') displayType = 'Syllabus';
+        else if (doc.type === 'competitive') displayType = 'Competitive Exam PYQ';
+
+        return `
+          <div class="doc-card">
+            <div class="doc-info">
+              <div class="doc-icon-container" style="background-color: var(--primary-accent); color: var(--primary-dark);">
+                <i data-lucide="file-text" style="width: 20px; height: 20px;"></i>
+              </div>
+              <div class="doc-meta">
+                <h5>${escapeHTML(doc.title)} <span class="user-tag" style="background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; font-size: 11px;">${displayType}</span></h5>
+                <div class="doc-meta-details">
+                  <span>Subject: ${escapeHTML(doc.subject || 'General')}</span>
+                  <span>&bull;</span>
+                  <span>Year: ${escapeHTML(doc.year || 'N/A')}</span>
+                  <span>&bull;</span>
+                  <span>Uploaded: ${new Date(doc.createdAt).toLocaleDateString()}</span>
+                </div>
+              </div>
+            </div>
+            <div class="doc-actions">
+              <a href="${doc.fileUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="padding: 8px 12px;">
+                <i data-lucide="eye" style="width: 14px; height: 14px;"></i> View
+              </a>
+              <button class="btn btn-secondary btn-sm btn-edit-uploaded-doc" 
+                data-id="${doc.id}" 
+                data-title="${escapeHTML(doc.title)}" 
+                data-subject="${escapeHTML(doc.subject || '')}" 
+                data-year="${escapeHTML(doc.year || '')}"
+                style="padding: 8px 12px;">
+                <i data-lucide="edit-3" style="width: 14px; height: 14px;"></i> Edit
+              </button>
+              ${(currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) ? `
+                <button class="btn btn-secondary btn-sm btn-move-doc" data-id="${doc.id}" data-title="${escapeHTML(doc.title)}" style="padding: 8px 12px;" title="Shift Document">
+                  <i data-lucide="folder-sync" style="width: 14px; height: 14px;"></i>
+                </button>
+              ` : ''}
+              <button class="btn btn-danger btn-sm btn-delete-uploaded-doc" data-id="${doc.id}" style="padding: 8px 12px;">
+                <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i> Delete
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  // Attach event handlers to dynamic edit buttons
+  container.querySelectorAll('.btn-edit-uploaded-doc').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      const title = btn.getAttribute('data-title');
+      const subject = btn.getAttribute('data-subject');
+      const year = btn.getAttribute('data-year');
+      openEditDocumentModal(id, title, subject, year);
+    });
+  });
+
+  // Attach event handlers to dynamic delete buttons
+  container.querySelectorAll('.btn-delete-uploaded-doc').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-id');
+      if (!confirm('Are you sure you want to delete this document permanently?')) return;
+      const originalHTML = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i>';
+      refreshIcons();
+      try {
+        await api.deleteDocument(id); const cardToRemove = btn.closest('.doc-card'); if(cardToRemove) { cardToRemove.style.transition = 'opacity 0.3s'; cardToRemove.style.opacity = '0'; setTimeout(() => cardToRemove.remove(), 300); }
+      } catch (err) {
+        alert(err.message || 'Failed to delete document');
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+        refreshIcons();
+      }
+    });
+  });
+
+  refreshIcons();
+}
+
+function openEditDocumentModal(docId, title, subject, year) {
+  document.getElementById('edit-doc-id').value = docId;
+  document.getElementById('edit-doc-title').value = title;
+  document.getElementById('edit-doc-subject').value = subject;
+  
+  const yearSelect = document.getElementById('edit-doc-year');
+  if (yearSelect) {
+    yearSelect.value = year;
+  }
+  
+  document.getElementById('edit-doc-error-alert').style.display = 'none';
+  document.getElementById('modal-edit-document').style.display = 'flex';
+}
+
+function openMoveDocumentModal(docId, docTitle) {
+  openUnifiedShiftModal('document', docId, docTitle, '');
+}
+
+async function loadSupportHistory() {
+  const historyList = document.getElementById('support-history-list');
+  if (!historyList) return;
+
+  if (!currentUser) {
+    return;
+  }
+
+  historyList.innerHTML = '<div style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 12px 0;">Loading history...</div>';
+
+  try {
+    const list = await api.getMyHelpRequests();
+    if (list.length === 0) {
+      historyList.innerHTML = '<div style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 16px 0;">No support requests submitted yet.</div>';
+    } else {
+      historyList.innerHTML = list.map(item => {
+        const isResolved = item.status === 'resolved';
+        return `
+          <div style="padding: 14px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); background-color: var(--bg-card); display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow-sm);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+              <h4 style="font-size: 14px; font-weight: 700; color: var(--primary-dark); margin: 0; line-height: 1.4;">
+                Subject: ${escapeHTML(item.subject)}
+              </h4>
+              <span class="user-tag" style="margin: 0; padding: 4px 10px; font-size: 10px; font-weight: 700; border-radius: 20px; background-color: ${isResolved ? '#dcfce7' : '#fee2e2'}; color: ${isResolved ? '#166534' : '#991b1b'}; display: inline-flex; align-items: center; gap: 4px; border: 1px solid ${isResolved ? '#bbf7d0' : '#fecaca'};">
+                <i data-lucide="${isResolved ? 'check-circle' : 'clock'}" style="width: 12px; height: 12px;"></i>
+                ${isResolved ? 'Resolved' : 'Pending'}
+              </span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-main); margin: 0; white-space: pre-wrap; line-height: 1.5; background-color: rgba(30, 86, 160, 0.02); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(30, 86, 160, 0.05);">${escapeHTML(item.message)}</p>
+            <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; margin-top: 2px;">
+              <i data-lucide="calendar" style="width: 12px; height: 12px;"></i>
+              Submitted: ${new Date(item.createdAt).toLocaleString()}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  } catch (err) {
+    console.error('Failed to load support history:', err);
+    historyList.innerHTML = '<div style="font-size: 13px; color: var(--danger); text-align: center; padding: 12px 0;">Failed to load support history.</div>';
+  }
+  refreshIcons();
+}
+
+// HELP & SUPPORT VIEW
+async function renderSupportView() {
+  const errorAlert = document.getElementById('support-error-alert');
+  const successAlert = document.getElementById('support-success-alert');
+
+  errorAlert.style.display = 'none';
+  successAlert.style.display = 'none';
+
+  const nameInput = document.getElementById('support-user-name');
+  const phoneInput = document.getElementById('support-user-phone');
+  const roleInput = document.getElementById('support-user-role');
+
+  if (currentUser) {
+    nameInput.value = capitalizeName(currentUser.name);
+    nameInput.disabled = true;
+    phoneInput.value = currentUser.phone;
+    phoneInput.disabled = true;
+    
+    let displayRole = currentUser.role;
+    if (currentUser.role === 'educator') displayRole = 'Educator (Teacher)';
+    else if (currentUser.role === 'superadmin') displayRole = 'Super Admin';
+    roleInput.value = displayRole;
+    roleInput.disabled = true;
+  } else {
+    nameInput.value = '';
+    nameInput.disabled = false;
+    nameInput.placeholder = 'Enter your name';
+    nameInput.required = true;
+    
+    phoneInput.value = '';
+    phoneInput.disabled = false;
+    phoneInput.placeholder = 'Enter your phone number';
+    phoneInput.required = true;
+    
+    roleInput.value = '';
+    roleInput.disabled = false;
+    roleInput.placeholder = 'e.g., student / educator';
+    roleInput.required = true;
+  }
+
+  // Handle reason query parameter and prefill fields
+  const params = getHashQueryParams();
+  const noticeBanner = document.getElementById('support-email-request-notice');
+  const reqEmailGroup = document.getElementById('support-requested-email-group');
+  const reqEmailInput = document.getElementById('support-requested-email');
+
+  if (params.reason === 'add-email') {
+    if (noticeBanner) noticeBanner.style.display = 'flex';
+    if (reqEmailGroup) reqEmailGroup.style.display = 'block';
+    if (reqEmailInput) {
+      reqEmailInput.value = '';
+      reqEmailInput.required = true;
+    }
+
+    if (params.name) {
+      nameInput.value = decodeURIComponent(params.name);
+      nameInput.disabled = true;
+    }
+    if (params.phone) {
+      phoneInput.value = decodeURIComponent(params.phone);
+      phoneInput.disabled = true;
+    }
+    if (params.role) {
+      let r = decodeURIComponent(params.role);
+      if (r === 'educator') r = 'Educator (Teacher)';
+      else if (r === 'superadmin') r = 'Super Admin';
+      roleInput.value = r;
+      roleInput.disabled = true;
+    }
+
+    document.getElementById('support-subject').value = 'Request to link email for password reset';
+    document.getElementById('support-message').value = 'Hello Admin,\n\nI need to reset my password, but my account does not have a registered email address. Please link my email address specified above to my account so I can receive the password reset OTP.\n\nThank you!';
+  } else if (params.reason === 'forgot-password') {
+    if (noticeBanner) noticeBanner.style.display = 'none';
+    if (reqEmailGroup) reqEmailGroup.style.display = 'none';
+    if (reqEmailInput) {
+      reqEmailInput.value = '';
+      reqEmailInput.required = false;
+    }
+    document.getElementById('support-subject').value = 'Forgot Password Reset Request';
+    document.getElementById('support-message').value = 'Hello, I forgot my password. Please reset my password to the default 123456. Thank you!';
+  } else {
+    if (noticeBanner) noticeBanner.style.display = 'none';
+    if (reqEmailGroup) reqEmailGroup.style.display = 'none';
+    if (reqEmailInput) {
+      reqEmailInput.value = '';
+      reqEmailInput.required = false;
+    }
+    document.getElementById('support-subject').value = '';
+    document.getElementById('support-message').value = '';
+  }
+
+  const showHistoryBtn = document.getElementById('btn-show-support-history');
+  if (showHistoryBtn) {
+    showHistoryBtn.style.display = currentUser ? 'block' : 'none';
+  }
+
+  refreshIcons();
+}
+
+// --- MOBILE BOTTOM NAV ANIMATION ENGINE (MENISCUS LIQUID NAVIGATION) ---
+const Meniscus = {
+  initialized: false,
+  x: 0,
+  v: 0,
+  target: 0,
+  dragging: false,
+  raf: 0,
+  last: 0,
+  current: 0,
+  suppressClick: false,
+  pid: null,
+  startX: 0,
+  
+  G: { W: 0, H: 0, R: 17, D: 46, RB: 29, S: 10, CY: 0, slots: [], span: 80 },
+  
+  reach(s, rb, by) {
+    return Math.sqrt(Math.max((s + rb) ** 2 - (s - by) ** 2, 1));
+  },
+  
+  clamp(v, a, b) {
+    return (v < a ? a : v > b ? b : v);
+  },
+  
+  smooth(t) {
+    return t * t * (3 - 2 * t);
+  },
+  
+  mixRGB(a, b, t) {
+    return `${Math.round(a[0] + (b[0] - a[0]) * t)} ${Math.round(a[1] + (b[1] - a[1]) * t)} ${Math.round(a[2] + (b[2] - a[2]) * t)}`;
+  },
+
+  measure() {
+    const dock = document.getElementById('dock');
+    const svg = document.getElementById('skin');
+    if (!dock || !svg) return false;
+    
+    const r = dock.getBoundingClientRect();
+    const W = Math.round(r.width);
+    const H = Math.round(r.height);
+    if (W < 40 || H < 30) return false;
+
+    if (this._lastW === W && this._lastH === H) {
+      return true;
+    }
+    this._lastW = W;
+    this._lastH = H;
+
+    const tabs = [...document.querySelectorAll('.mobile-bottom-nav-item')];
+    this.G.slots = tabs.map((t) => {
+      const b = t.getBoundingClientRect();
+      return b.left - r.left + b.width / 2;
+    });
+    this.G.span = this.G.slots.length > 1 ? this.G.slots[1] - this.G.slots[0] : W;
+
+    this.G.W = W;
+    this.G.H = H;
+    this.G.R = this.clamp(H * 0.20, 13, 20);
+    this.G.CY = 0;
+
+    let D = Math.min(H * 0.68, this.G.span * 0.78);
+    const room = this.G.slots[0] - this.G.R - 6;
+    for (let i = 0; i < 3; i++) {
+      const hw = this.reach(D * 0.22, D / 2 + 6, this.G.CY);
+      if (hw <= room) break;
+      D *= room / hw;
+    }
+    this.G.D = Math.max(Math.round(D), 30);
+    this.G.S = this.G.D * 0.22;
+    this.G.RB = this.G.D / 2 + 6;
+
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    dock.style.setProperty('--dock-r', `${this.G.R.toFixed(1)}px`);
+    dock.style.setProperty('--bead-d', `${this.G.D}px`);
+    dock.style.setProperty('--bead-cy', `${this.G.CY}px`);
+    dock.style.setProperty('--rise', `${(H / 2 - this.G.CY).toFixed(1)}px`);
+    return true;
+  },
+
+  trough(bx, by, rb, sL, sR) {
+    const { W, H, R } = this.G;
+    const wing = (s, side) => {
+      const L = s + rb;
+      const half = this.reach(s, rb, by);
+      const sx = bx + side * half;
+      return { sx, s, tx: sx + ((bx - sx) / L) * s, ty: s + ((by - s) / L) * s };
+    };
+    const A = wing(sL, -1);
+    const B = wing(sR, +1);
+
+    const a0 = Math.atan2(A.ty - by, A.tx - bx);
+    const a1 = Math.atan2(B.ty - by, B.tx - bx);
+    let sweep = ((a0 - a1) * 180) / Math.PI;
+    while (sweep < 0) sweep += 360;
+    const large = sweep > 180 ? 1 : 0;
+
+    const n = (v) => v.toFixed(2);
+    return (
+      `M0 ${n(R)}` +
+      `A${n(R)} ${n(R)} 0 0 1 ${n(R)} 0` +
+      `L${n(this.clamp(A.sx, R, W - R))} 0` +
+      `A${n(sL)} ${n(sL)} 0 0 1 ${n(A.tx)} ${n(A.ty)}` +
+      `A${n(rb)} ${n(rb)} 0 ${large} 0 ${n(B.tx)} ${n(B.ty)}` +
+      `A${n(sR)} ${n(sR)} 0 0 1 ${n(this.clamp(B.sx, R, W - R))} 0` +
+      `L${n(W - R)} 0` +
+      `A${n(R)} ${n(R)} 0 0 1 ${n(W)} ${n(R)}` +
+      `L${n(W)} ${n(H - R)}` +
+      `A${n(R)} ${n(R)} 0 0 1 ${n(W - R)} ${n(H)}` +
+      `L${n(R)} ${n(H)}` +
+      `A${n(R)} ${n(R)} 0 0 1 0 ${n(H - R)}` +
+      `Z`
+    );
+  },
+
+  paint() {
+    const fillP = document.getElementById('skinFill');
+    const bead = document.getElementById('bead');
+    const tabs = [...document.querySelectorAll('.mobile-bottom-nav-item')];
+    if (!fillP || !bead) return;
+    if (typeof this.x !== 'number' || isNaN(this.x)) return;
+
+    const q = this.clamp(this.v / 1100, -1, 1) * (this.dragging ? 0.5 : 1);
+    const mag = Math.abs(q);
+
+    const sL = this.clamp(this.G.S * (1 + 0.06 * mag + 0.40 * q), this.G.S * 0.55, this.G.S * 2.1);
+    const sR = this.clamp(this.G.S * (1 + 0.06 * mag - 0.40 * q), this.G.S * 0.55, this.G.S * 2.1);
+
+    const d = this.trough(this.x, this.G.CY, this.G.RB, sL, sR);
+    fillP.setAttribute('d', d);
+
+    const sx = 1 + 0.07 * mag;
+    bead.style.transform = `translate3d(${this.x.toFixed(2)}px,0,0) scale(${sx.toFixed(3)},${(1 / sx).toFixed(3)})`;
+
+    for (let i = 0; i < tabs.length; i++) {
+      const dx = Math.abs(this.x - this.G.slots[i]);
+      tabs[i].style.setProperty('--t', this.smooth(this.clamp(1 - dx / (this.G.span * 0.55), 0, 1)).toFixed(3));
+    }
+  },
+
+  loop(now) {
+    this.raf = 0;
+    const dt = Math.min((now - this.last) / 1000, 1 / 30);
+    this.last = now;
+
+    const K = this.dragging ? 900 : 680;
+    const C = this.dragging ? 52 : 36;
+    let step = dt;
+    while (step > 0) {
+      const h = Math.min(step, 1 / 240);
+      this.v += (-K * (this.x - this.target) - C * this.v) * h;
+      this.x += this.v * h;
+      step -= h;
+    }
+
+    this.paint();
+    if (Math.abs(this.x - this.target) > 0.05 || Math.abs(this.v) > 0.6 || this.dragging) {
+      this.run();
+    } else {
+      this.x = this.target;
+      this.v = 0;
+      this.paint();
+    }
+  },
+
+  run() {
+    if (this.raf) return;
+    this.last = performance.now();
+    this.raf = requestAnimationFrame((now) => this.loop(now));
+  },
+
+  jump(to) {
+    this.target = to;
+    this.run();
+  },
+
+  select(i, { focus = false, animate = true, triggerNavigate = true } = {}) {
+    const tabs = [...document.querySelectorAll('.mobile-bottom-nav-item')];
+    if (tabs.length === 0) return;
+    this.current = (i + tabs.length) % tabs.length;
+    
+    tabs.forEach((t, n) => {
+      t.setAttribute('aria-selected', String(n === this.current));
+      t.tabIndex = n === this.current ? 0 : -1;
+    });
+
+    if (triggerNavigate) {
+      const targetPath = tabs[this.current].getAttribute('href');
+      if (targetPath) {
+        let cleanTargetPath = targetPath;
+        if (cleanTargetPath.startsWith('#/')) cleanTargetPath = cleanTargetPath.slice(1);
+        else if (cleanTargetPath.startsWith('#')) cleanTargetPath = cleanTargetPath.slice(1);
+        if (!cleanTargetPath.startsWith('/')) cleanTargetPath = '/' + cleanTargetPath;
+        cleanTargetPath = cleanTargetPath.split('?')[0];
+
+        let currentPath = window.location.pathname || '/';
+        if (window.location.hash && window.location.hash.startsWith('#/')) {
+          currentPath = window.location.hash.slice(1);
+        } else if (window.location.hash && window.location.hash.startsWith('#') && window.location.hash.includes('/')) {
+          currentPath = window.location.hash.slice(1);
+        }
+        currentPath = currentPath.split('?')[0];
+        if (currentPath.endsWith('/') && currentPath.length > 1) {
+          currentPath = currentPath.slice(0, -1);
+        }
+        if (!currentPath.startsWith('/')) {
+          currentPath = '/' + currentPath;
+        }
+
+        const profileRoutes = [
+          '/profile', '/reset-password', '/appearance', '/reviews', 
+          '/contributors', '/my-uploads', '/my-contributions', 
+          '/teacher-dashboard', '/support', '/privacy', '/terms'
+        ];
+        if (currentPath.startsWith('/admin') || profileRoutes.includes(currentPath)) {
+          currentPath = '/profile';
+        }
+
+        if (currentPath !== cleanTargetPath) {
+          navigate(targetPath);
+        }
+      }
+    }
+
+    if (focus) tabs[this.current].focus();
+    if (animate) {
+      this.jump(this.G.slots[this.current]);
+    } else {
+      this.x = this.target = this.G.slots[this.current];
+      this.v = 0;
+      this.paint();
+    }
+  },
+
+  init() {
+    const dock = document.getElementById('dock');
+    if (!dock) return;
+    
+    if (this.initialized) return;
+    this.initialized = true;
+
+    const tabs = [...document.querySelectorAll('.mobile-bottom-nav-item')];
+    
+    tabs.forEach((t, i) => {
+      t.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (this.suppressClick) {
+          return;
+        }
+        this.select(i);
+      });
+    });
+
+    dock.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      this.pid = e.pointerId;
+      this.startX = e.clientX;
+      this.suppressClick = false;
+    });
+
+    dock.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== this.pid) return;
+      if (!this.dragging && Math.abs(e.clientX - this.startX) < 7) return;
+      if (!this.dragging) {
+        this.dragging = true;
+        this.suppressClick = true;
+        dock.classList.add('is-dragging');
+        dock.setPointerCapture(this.pid);
+      }
+      e.preventDefault();
+      const left = dock.getBoundingClientRect().left;
+      this.target = this.clamp(e.clientX - left, this.G.slots[0], this.G.slots[this.G.slots.length - 1]);
+      this.run();
+    });
+
+    const release = (e) => {
+      if (e.pointerId !== this.pid) return;
+      this.pid = null;
+      if (!this.dragging) return;
+      this.dragging = false;
+      dock.classList.remove('is-dragging');
+      let near = 0, nd = Infinity;
+      this.G.slots.forEach((s, i) => {
+        const d = Math.abs(this.target - s);
+        if (d < nd) {
+          nd = d;
+          near = i;
+        }
+      });
+      this.select(near);
+      setTimeout(() => { this.suppressClick = false; }, 50);
+    };
+
+    dock.addEventListener('pointerup', release);
+    dock.addEventListener('pointercancel', release);
+
+    const layout = (animate) => {
+      if (!this.measure()) return;
+      if (animate) this.jump(this.G.slots[this.current]);
+      else {
+        this.x = this.target = this.G.slots[this.current];
+        this.v = 0;
+        this.paint();
+      }
+      dock.classList.add('is-ready');
+    };
+
+    layout(false);
+    let resizeRaf = 0;
+    new ResizeObserver(() => {
+      if (resizeRaf) return;
+      resizeRaf = requestAnimationFrame(() => {
+        layout(false);
+        resizeRaf = 0;
+      });
+    }).observe(dock);
+    document.fonts?.ready.then(() => layout(false));
+    
+    // Sync initial state
+    let cleanPath = window.location.pathname || '/';
+    if (window.location.hash && window.location.hash.startsWith('#/')) {
+      cleanPath = window.location.hash.slice(1);
+    } else if (window.location.hash && window.location.hash.startsWith('#') && window.location.hash.includes('/')) {
+      cleanPath = window.location.hash.slice(1);
+    }
+    cleanPath = cleanPath.split('?')[0];
+    if (cleanPath.endsWith('/') && cleanPath.length > 1) {
+      cleanPath = cleanPath.slice(0, -1);
+    }
+    if (!cleanPath.startsWith('/')) {
+      cleanPath = '/' + cleanPath;
+    }
+
+    // Map sub-sections to Profile tab
+    const profileRoutes = [
+      '/profile', '/reset-password', '/appearance', '/reviews', 
+      '/contributors', '/my-uploads', '/my-contributions', 
+      '/teacher-dashboard', '/support', '/generators', '/privacy', '/terms'
+    ];
+    if (cleanPath.startsWith('/admin') || profileRoutes.includes(cleanPath)) {
+      cleanPath = '/profile';
+    }
+
+    const activeIndex = tabs.findIndex(tab => {
+      let href = tab.getAttribute('href');
+      if (href) {
+        if (href.startsWith('#/')) href = href.slice(1);
+        else if (href.startsWith('#')) href = href.slice(1);
+        if (!href.startsWith('/')) href = '/' + href;
+        href = href.split('?')[0];
+        return href === cleanPath;
+      }
+      return false;
+    });
+
+    if (activeIndex !== -1 && this.G.slots.length > 0) {
+      this.select(activeIndex, { animate: false, triggerNavigate: false });
+    } else {
+      this.select(2, { animate: false, triggerNavigate: false }); // Default to Home index
+    }
+  }
+};
+
+function updateMobileBottomNavPosition() {
+  const tabs = [...document.querySelectorAll('.mobile-bottom-nav-item')];
+  if (tabs.length === 0) return;
+  
+  if (!Meniscus.initialized) {
+    Meniscus.init();
+  }
+  
+  if (Meniscus.G.slots.length === 0) return;
+  
+  let cleanPath = window.location.pathname || '/';
+  if (window.location.hash && window.location.hash.startsWith('#/')) {
+    cleanPath = window.location.hash.slice(1);
+  } else if (window.location.hash && window.location.hash.startsWith('#') && window.location.hash.includes('/')) {
+    cleanPath = window.location.hash.slice(1);
+  }
+  cleanPath = cleanPath.split('?')[0];
+  if (cleanPath.endsWith('/') && cleanPath.length > 1) {
+    cleanPath = cleanPath.slice(0, -1);
+  }
+  if (!cleanPath.startsWith('/')) {
+    cleanPath = '/' + cleanPath;
+  }
+
+  // Map sub-sections to Profile tab
+  const profileRoutes = [
+    '/profile', '/reset-password', '/appearance', '/reviews', 
+    '/contributors', '/my-uploads', '/my-contributions', 
+    '/teacher-dashboard', '/support', '/generators', '/privacy', '/terms'
+  ];
+  if (cleanPath.startsWith('/admin') || profileRoutes.includes(cleanPath)) {
+    cleanPath = '/profile';
+  }
+
+  const activeIndex = tabs.findIndex(tab => {
+    let href = tab.getAttribute('href');
+    if (href) {
+      if (href.startsWith('#/')) href = href.slice(1);
+      else if (href.startsWith('#')) href = href.slice(1);
+      if (!href.startsWith('/')) href = '/' + href;
+      href = href.split('?')[0];
+      return href === cleanPath;
+    }
+    return false;
+  });
+
+  if (activeIndex !== -1) {
+    Meniscus.select(activeIndex, { animate: false, triggerNavigate: false });
+  } else {
+    Meniscus.select(2, { animate: false, triggerNavigate: false }); // Default to Home index
+  }
+}
+
+// --- REVIEWS VIEW LOGIC ---
+let selectedReviewRating = 0;
+
+function initReviewEventHandlers() {
+  const form = document.getElementById('form-review');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const comment = document.getElementById('review-comment').value;
+      const errorAlert = document.getElementById('review-error-alert');
+      const successAlert = document.getElementById('review-success-alert');
+      const btnSubmit = document.getElementById('btn-submit-review');
+      
+      errorAlert.style.display = 'none';
+      successAlert.style.display = 'none';
+
+      if (selectedReviewRating === 0) {
+        errorAlert.textContent = 'Please select a rating (1-5 stars)';
+        errorAlert.style.display = 'block';
+        return;
+      }
+
+      btnSubmit.disabled = true;
+      const originalHTML = btnSubmit.innerHTML;
+      btnSubmit.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 18px; height: 18px;"></i> Submitting...';
+      refreshIcons();
+
+      try {
+        await api.submitReview(selectedReviewRating, comment);
+        successAlert.textContent = 'Thank you! Your review has been submitted successfully.';
+        successAlert.style.display = 'block';
+        form.reset();
+        selectedReviewRating = 0;
+        updateStarRatingDisplay(0);
+        setTimeout(async () => {
+          await renderReviewsView();
+        }, 1500);
+      } catch (err) {
+        errorAlert.textContent = err.message || 'Failed to submit review';
+        errorAlert.style.display = 'block';
+      } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = originalHTML;
+        refreshIcons();
+      }
+    });
+  }
+
+  // Star rating tap interaction
+  const stars = document.querySelectorAll('.star-rating-input .star-btn');
+  stars.forEach(star => {
+    star.addEventListener('click', () => {
+      const val = parseInt(star.getAttribute('data-value'));
+      selectedReviewRating = val;
+      document.getElementById('review-rating-value').value = val;
+      updateStarRatingDisplay(val);
+    });
+
+    star.addEventListener('mouseenter', () => {
+      const val = parseInt(star.getAttribute('data-value'));
+      updateStarRatingDisplay(val, true);
+    });
+
+    star.addEventListener('mouseleave', () => {
+      updateStarRatingDisplay(selectedReviewRating);
+    });
+  });
+}
+
+function updateStarRatingDisplay(rating, isHover = false) {
+  const stars = document.querySelectorAll('.star-rating-input .star-btn');
+  stars.forEach((star, index) => {
+    const starIcon = star.querySelector('svg') || star.querySelector('i');
+    if (index < rating) {
+      star.style.color = 'var(--warning)';
+      if (starIcon) {
+        starIcon.style.fill = 'var(--warning)';
+      }
+    } else {
+      star.style.color = '#cbd5e1';
+      if (starIcon) {
+        starIcon.style.fill = 'none';
+      }
+    }
+  });
+}
+
+// --- EMAIL LINK & UPDATE MODAL CONTROLLER ---
+let isEmailModalCompulsory = false;
+
+function checkCompulsoryEmail() {
+  if (currentUser && !currentUser.email) {
+    setTimeout(() => {
+      openEmailModal({ compulsory: true });
+    }, 250);
+  }
+}
+
+function openEmailModal({ compulsory = false } = {}) {
+  const modal = document.getElementById('modal-email');
+  const titleText = document.getElementById('modal-email-title-text');
+  const closeBtn = document.getElementById('modal-email-close');
+  const cancelBtn = document.getElementById('btn-modal-email-cancel');
+  const noticeEl = document.getElementById('modal-email-notice');
+  const errorEl = document.getElementById('modal-email-error');
+  const successEl = document.getElementById('modal-email-success');
+  const inputEmail = document.getElementById('input-modal-email');
+  const submitText = document.getElementById('text-modal-email-submit');
+
+  if (!modal || !inputEmail) return;
+
+  isEmailModalCompulsory = !!compulsory;
+
+  if (errorEl) errorEl.style.display = 'none';
+  if (successEl) successEl.style.display = 'none';
+
+  if (isEmailModalCompulsory) {
+    if (titleText) titleText.textContent = 'Link Email Address';
+    if (closeBtn) closeBtn.style.display = 'none';
+    if (cancelBtn) cancelBtn.style.display = 'none';
+    if (noticeEl) noticeEl.style.display = 'flex';
+    if (submitText) submitText.textContent = 'Save Email';
+    inputEmail.value = '';
+  } else {
+    if (titleText) titleText.textContent = 'Update Email Address';
+    if (closeBtn) closeBtn.style.display = 'flex';
+    if (cancelBtn) cancelBtn.style.display = 'inline-block';
+    if (noticeEl) noticeEl.style.display = 'none';
+    if (submitText) submitText.textContent = 'Update Email';
+    inputEmail.value = currentUser ? (currentUser.email || '') : '';
+  }
+
+  modal.style.display = 'flex';
+  refreshIcons();
+  setTimeout(() => inputEmail.focus(), 100);
+}
+
+function closeEmailModal() {
+  if (isEmailModalCompulsory && currentUser && !currentUser.email) {
+    return;
+  }
+  const modal = document.getElementById('modal-email');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+function initEmailModalEventHandlers() {
+  const closeBtn = document.getElementById('modal-email-close');
+  const cancelBtn = document.getElementById('btn-modal-email-cancel');
+  const modal = document.getElementById('modal-email');
+  const form = document.getElementById('form-update-email');
+
+  if (closeBtn) closeBtn.addEventListener('click', closeEmailModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeEmailModal);
+
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeEmailModal();
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.style.display !== 'none') {
+        closeEmailModal();
+      }
+    });
+  }
+
+  // Delegated click on Update buttons (PC dropdown & Mobile profile)
+  document.addEventListener('click', (e) => {
+    const updateBtn = e.target.closest('.btn-open-update-email');
+    if (updateBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const profileMenu = document.getElementById('profile-dropdown-menu');
+      if (profileMenu) profileMenu.classList.remove('show');
+      openEmailModal({ compulsory: false });
+    }
+  });
+
+  // Submit email update / link form
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const emailInput = document.getElementById('input-modal-email');
+      const errorEl = document.getElementById('modal-email-error');
+      const successEl = document.getElementById('modal-email-success');
+      const submitBtn = document.getElementById('btn-modal-email-submit');
+      const submitText = document.getElementById('text-modal-email-submit');
+
+      if (!emailInput) return;
+      const email = emailInput.value.trim();
+
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!email || !emailRegex.test(email)) {
+        if (errorEl) {
+          errorEl.textContent = 'Please enter a valid email address (e.g. example@gmail.com)';
+          errorEl.style.display = 'block';
+        }
+        return;
+      }
+
+      if (errorEl) errorEl.style.display = 'none';
+      if (successEl) successEl.style.display = 'none';
+
+      submitBtn.disabled = true;
+      const originalText = submitText ? submitText.textContent : 'Save Email';
+      if (submitText) submitText.textContent = 'Saving...';
+
+      try {
+        const res = await api.updateEmail(email);
+        if (res.user) {
+          currentUser = res.user;
+          localStorage.setItem('user', JSON.stringify(currentUser));
+        } else if (currentUser) {
+          currentUser.email = email.toLowerCase();
+          localStorage.setItem('user', JSON.stringify(currentUser));
+        }
+
+        isEmailModalCompulsory = false;
+
+        // Refresh UI
+        updateNavbar();
+        const profileView = document.getElementById('view-profile');
+        if (profileView && profileView.style.display !== 'none' && typeof renderProfileView === 'function') {
+          renderProfileView();
+        }
+
+        if (successEl) {
+          successEl.textContent = res.message || 'Email successfully saved!';
+          successEl.style.display = 'block';
+        }
+
+        setTimeout(() => {
+          closeEmailModal();
+        }, 700);
+      } catch (err) {
+        if (errorEl) {
+          errorEl.textContent = err.message || 'Failed to save email address';
+          errorEl.style.display = 'block';
+        }
+      } finally {
+        submitBtn.disabled = false;
+        if (submitText) submitText.textContent = originalText;
+        refreshIcons();
+      }
+    });
+  }
+}
+
+function openEditNameModal() {
+  const modal = document.getElementById('modal-edit-name');
+  const inputName = document.getElementById('input-modal-name');
+  const errorEl = document.getElementById('modal-edit-name-error');
+  const successEl = document.getElementById('modal-edit-name-success');
+
+  if (!modal || !inputName) return;
+
+  if (errorEl) errorEl.style.display = 'none';
+  if (successEl) successEl.style.display = 'none';
+
+  inputName.value = currentUser ? (currentUser.name || '') : '';
+  modal.style.display = 'flex';
+  refreshIcons();
+  setTimeout(() => {
+    inputName.focus();
+    inputName.select();
+  }, 100);
+}
+
+function closeEditNameModal() {
+  const modal = document.getElementById('modal-edit-name');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+function initEditNameModalEventHandlers() {
+  const closeBtn = document.getElementById('modal-edit-name-close');
+  const cancelBtn = document.getElementById('btn-modal-edit-name-cancel');
+  const modal = document.getElementById('modal-edit-name');
+  const form = document.getElementById('form-edit-name');
+
+  if (closeBtn) closeBtn.addEventListener('click', closeEditNameModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeEditNameModal);
+
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeEditNameModal();
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.style.display !== 'none') {
+        closeEditNameModal();
+      }
+    });
+  }
+
+  // Delegated click on Edit Name buttons (Profile hero card, Account list, PC dropdown)
+  document.addEventListener('click', (e) => {
+    const editBtn = e.target.closest('.btn-open-edit-name');
+    if (editBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const profileMenu = document.getElementById('profile-dropdown-menu');
+      if (profileMenu) profileMenu.classList.remove('show');
+      openEditNameModal();
+    }
+  });
+
+  // Submit edit name form
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const nameInput = document.getElementById('input-modal-name');
+      const errorEl = document.getElementById('modal-edit-name-error');
+      const successEl = document.getElementById('modal-edit-name-success');
+      const submitBtn = document.getElementById('btn-modal-edit-name-submit');
+      const submitText = document.getElementById('text-modal-edit-name-submit');
+
+      if (!nameInput) return;
+      const rawName = nameInput.value.trim().replace(/\s+/g, ' ');
+
+      if (!rawName || rawName.length < 2 || rawName.length > 60) {
+        if (errorEl) {
+          errorEl.textContent = 'Please enter a valid name (2 to 60 characters)';
+          errorEl.style.display = 'block';
+        }
+        return;
+      }
+
+      const validNameRegex = /^[\p{L}\s.'-]+$/u;
+      if (!validNameRegex.test(rawName)) {
+        if (errorEl) {
+          errorEl.textContent = 'Name should only contain letters, spaces, dots, and hyphens';
+          errorEl.style.display = 'block';
+        }
+        return;
+      }
+
+      if (currentUser && currentUser.name === rawName) {
+        closeEditNameModal();
+        return;
+      }
+
+      if (errorEl) errorEl.style.display = 'none';
+      if (successEl) successEl.style.display = 'none';
+
+      submitBtn.disabled = true;
+      const originalText = submitText ? submitText.textContent : 'Save Name';
+      if (submitText) submitText.textContent = 'Saving...';
+
+      try {
+        const res = await api.updateName(rawName);
+        if (res.user) {
+          currentUser = res.user;
+          localStorage.setItem('user', JSON.stringify(currentUser));
+        } else if (currentUser) {
+          currentUser.name = rawName;
+          localStorage.setItem('user', JSON.stringify(currentUser));
+        }
+
+        // Refresh UI
+        updateNavbar();
+        const profileView = document.getElementById('view-profile');
+        if (profileView && profileView.style.display !== 'none' && typeof renderProfileView === 'function') {
+          renderProfileView();
+        }
+
+        if (successEl) {
+          successEl.textContent = res.message || 'Name updated successfully!';
+          successEl.style.display = 'block';
+        }
+
+        setTimeout(() => {
+          closeEditNameModal();
+        }, 700);
+      } catch (err) {
+        if (errorEl) {
+          errorEl.textContent = err.message || 'Failed to update name';
+          errorEl.style.display = 'block';
+        }
+      } finally {
+        submitBtn.disabled = false;
+        if (submitText) submitText.textContent = originalText;
+        refreshIcons();
+      }
+    });
+  }
+}
+
+// --- FORGOT PASSWORD CONTROLLER (SERVER-AUTHORITATIVE) ---
+const forgotPasswordState = {
+  verificationId: null,
+  maskedEmail: '',
+  resetToken: null,
+  timerInterval: null,
+  countdown: 60
+};
+
+function getOtpBoxes() {
+  return Array.from(document.querySelectorAll('.otp-box'));
+}
+
+function getOtpValue() {
+  return getOtpBoxes().map(b => b.value.trim()).join('');
+}
+
+function clearOtpBoxes() {
+  const boxes = getOtpBoxes();
+  boxes.forEach(b => { 
+    b.value = ''; 
+    b.classList.remove('filled');
+  });
+  const wrapper = document.getElementById('otp-3d-wrapper');
+  if (wrapper) {
+    wrapper.classList.remove('otp-success-state', 'otp-error-state');
+  }
+  const first = document.querySelector('.otp-box[data-idx="0"]');
+  if (first) setTimeout(() => first.focus(), 100);
+}
+
+function renderForgotPasswordView() {
+  const stepPhone = document.getElementById('forgot-step-phone');
+  const stepOtp = document.getElementById('forgot-step-otp');
+  const stepNewPass = document.getElementById('forgot-step-newpass');
+
+  const phoneError = document.getElementById('forgot-phone-error-alert');
+  const otpError = document.getElementById('forgot-otp-error-alert');
+  const otpSuccess = document.getElementById('forgot-otp-success-alert');
+  const newPassError = document.getElementById('forgot-newpass-error-alert');
+  const newPassSuccess = document.getElementById('forgot-newpass-success-alert');
+
+  const phoneInput = document.getElementById('forgot-phone-input');
+  const newPassInput = document.getElementById('forgot-new-password');
+  const confirmPassInput = document.getElementById('forgot-confirm-password');
+
+  if (forgotPasswordState.timerInterval) {
+    clearInterval(forgotPasswordState.timerInterval);
+    forgotPasswordState.timerInterval = null;
+  }
+
+  if (stepPhone) stepPhone.style.display = 'block';
+  if (stepOtp) stepOtp.style.display = 'none';
+  if (stepNewPass) stepNewPass.style.display = 'none';
+
+  if (phoneError) phoneError.style.display = 'none';
+  if (otpError) otpError.style.display = 'none';
+  if (otpSuccess) otpSuccess.style.display = 'none';
+  if (newPassError) newPassError.style.display = 'none';
+  if (newPassSuccess) newPassSuccess.style.display = 'none';
+
+  if (phoneInput) {
+    phoneInput.value = currentUser ? currentUser.phone : '';
+  }
+
+  clearOtpBoxes();
+
+  if (newPassInput) {
+    newPassInput.value = '';
+    newPassInput.type = 'password';
+  }
+  if (confirmPassInput) {
+    confirmPassInput.value = '';
+    confirmPassInput.type = 'password';
+  }
+
+  forgotPasswordState.verificationId = null;
+  forgotPasswordState.maskedEmail = '';
+  forgotPasswordState.resetToken = null;
+
+  refreshIcons();
+}
+
+function startOtpResendTimer(seconds = 60) {
+  if (forgotPasswordState.timerInterval) {
+    clearInterval(forgotPasswordState.timerInterval);
+  }
+
+  forgotPasswordState.countdown = seconds;
+  const timerText = document.getElementById('forgot-otp-timer');
+  const timerCount = document.getElementById('forgot-timer-count');
+  const resendBtn = document.getElementById('btn-resend-forgot-otp');
+
+  if (timerText) timerText.style.display = 'inline';
+  if (timerCount) timerCount.textContent = String(seconds);
+  if (resendBtn) resendBtn.style.display = 'none';
+
+  forgotPasswordState.timerInterval = setInterval(() => {
+    forgotPasswordState.countdown -= 1;
+    if (timerCount) timerCount.textContent = String(forgotPasswordState.countdown);
+
+    if (forgotPasswordState.countdown <= 0) {
+      clearInterval(forgotPasswordState.timerInterval);
+      forgotPasswordState.timerInterval = null;
+      if (timerText) timerText.style.display = 'none';
+      if (resendBtn) {
+        resendBtn.style.display = 'inline';
+        resendBtn.disabled = false;
+        resendBtn.textContent = 'Resend Code';
+      }
+    }
+  }, 1000);
+}
+
+function initForgotPasswordEventHandlers() {
+  const formPhone = document.getElementById('form-forgot-phone');
+  const formOtp = document.getElementById('form-forgot-otp');
+  const formNewPass = document.getElementById('form-forgot-newpass');
+  const resendBtn = document.getElementById('btn-resend-forgot-otp');
+  const backToPhoneBtn = document.getElementById('btn-back-to-phone');
+  const showNewPassBtn = document.getElementById('btn-show-forgot-new-pass');
+  const showConfirmPassBtn = document.getElementById('btn-show-forgot-confirm-pass');
+  const otpBoxes = getOtpBoxes();
+
+  // Setup 6-box OTP behaviors (auto-advance, backspace, paste, arrow keys)
+  otpBoxes.forEach((box, idx) => {
+    box.addEventListener('input', (e) => {
+      const val = e.target.value.replace(/\D/g, '');
+      e.target.value = val ? val.charAt(0) : '';
+
+      // Toggle 3D pressed/filled styling
+      if (e.target.value) {
+        box.classList.add('filled');
+      } else {
+        box.classList.remove('filled');
+      }
+
+      // Reset any active error state when user modifies input
+      const wrapper = document.getElementById('otp-3d-wrapper');
+      if (wrapper && wrapper.classList.contains('otp-error-state')) {
+        wrapper.classList.remove('otp-error-state');
+      }
+
+      if (val && idx < otpBoxes.length - 1) {
+        otpBoxes[idx + 1].focus();
+        otpBoxes[idx + 1].select();
+      }
+    });
+
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace') {
+        if (!e.target.value && idx > 0) {
+          otpBoxes[idx - 1].focus();
+          otpBoxes[idx - 1].value = '';
+          otpBoxes[idx - 1].classList.remove('filled');
+        } else {
+          box.classList.remove('filled');
+        }
+      } else if (e.key === 'ArrowLeft' && idx > 0) {
+        otpBoxes[idx - 1].focus();
+      } else if (e.key === 'ArrowRight' && idx < otpBoxes.length - 1) {
+        otpBoxes[idx + 1].focus();
+      }
+    });
+
+    box.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const pastedData = (e.clipboardData || window.clipboardData).getData('text');
+      const digits = pastedData.replace(/\D/g, '').slice(0, 6);
+      if (!digits) return;
+
+      const wrapper = document.getElementById('otp-3d-wrapper');
+      if (wrapper) wrapper.classList.remove('otp-error-state');
+
+      digits.split('').forEach((d, i) => {
+        if (otpBoxes[i]) {
+          otpBoxes[i].value = d;
+          otpBoxes[i].classList.add('filled');
+        }
+      });
+
+      const focusIdx = Math.min(digits.length, otpBoxes.length - 1);
+      otpBoxes[focusIdx].focus();
+    });
+  });
+
+  // Password visibility toggles for Step 3
+  if (showNewPassBtn) {
+    showNewPassBtn.addEventListener('click', () => {
+      const input = document.getElementById('forgot-new-password');
+      const icon = showNewPassBtn.querySelector('i');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        input.type = 'password';
+        icon.setAttribute('data-lucide', 'eye');
+      }
+      refreshIcons();
+    });
+  }
+
+  if (showConfirmPassBtn) {
+    showConfirmPassBtn.addEventListener('click', () => {
+      const input = document.getElementById('forgot-confirm-password');
+      const icon = showConfirmPassBtn.querySelector('i');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        input.type = 'password';
+        icon.setAttribute('data-lucide', 'eye');
+      }
+      refreshIcons();
+    });
+  }
+
+  // Back to phone button
+  if (backToPhoneBtn) {
+    backToPhoneBtn.addEventListener('click', () => {
+      document.getElementById('forgot-step-phone').style.display = 'block';
+      document.getElementById('forgot-step-otp').style.display = 'none';
+      document.getElementById('forgot-step-newpass').style.display = 'none';
+      if (forgotPasswordState.timerInterval) {
+        clearInterval(forgotPasswordState.timerInterval);
+        forgotPasswordState.timerInterval = null;
+      }
+      clearOtpBoxes();
+      refreshIcons();
+    });
+  }
+
+  // STEP 1: Phone submission (Requests OTP from Server)
+  if (formPhone) {
+    formPhone.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const phoneInput = document.getElementById('forgot-phone-input');
+      const errorAlert = document.getElementById('forgot-phone-error-alert');
+      const submitBtn = document.getElementById('btn-send-forgot-otp');
+      const btnContent = document.getElementById('btn-send-forgot-otp-content');
+
+      if (!phoneInput) return;
+      const phone = phoneInput.value.trim();
+
+      if (!/^\d{10,15}$/.test(phone)) {
+        if (errorAlert) {
+          errorAlert.textContent = 'Please enter a valid 10-digit registered phone number.';
+          errorAlert.style.display = 'block';
+        }
+        return;
+      }
+
+      if (errorAlert) errorAlert.style.display = 'none';
+      submitBtn.disabled = true;
+      const originalHTML = btnContent.innerHTML;
+      btnContent.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 18px; height: 18px;"></i> Dispathing code...';
+      refreshIcons();
+
+      try {
+        const res = await api.forgotPassword(phone);
+
+        if (!res.hasEmail) {
+          // No email registered in DB -> Navigate to Support Page with prefilled application
+          const supportUrl = `/support?reason=add-email&phone=${encodeURIComponent(phone)}&name=${encodeURIComponent(res.name || '')}&role=${encodeURIComponent(res.role || '')}`;
+          navigate(supportUrl);
+          return;
+        }
+
+        // Store server-issued verification session ID
+        forgotPasswordState.verificationId = res.verificationId;
+        forgotPasswordState.maskedEmail = res.maskedEmail || 'registered email';
+
+        // Switch to Step 2 (Verify OTP)
+        document.getElementById('forgot-step-phone').style.display = 'none';
+        document.getElementById('forgot-step-otp').style.display = 'block';
+        document.getElementById('forgot-step-newpass').style.display = 'none';
+        document.getElementById('forgot-masked-email').textContent = forgotPasswordState.maskedEmail;
+
+        clearOtpBoxes();
+        const shieldIcon = document.getElementById('otp-shield-icon');
+        if (shieldIcon) {
+          shieldIcon.innerHTML = '<i data-lucide="shield-check" style="width: 28px; height: 28px;"></i>';
+        }
+        startOtpResendTimer(res.cooldownSeconds || 60);
+        refreshIcons();
+      } catch (err) {
+        if (errorAlert) {
+          errorAlert.textContent = err.message || 'Failed to process verification request.';
+          errorAlert.style.display = 'block';
+        }
+      } finally {
+        submitBtn.disabled = false;
+        btnContent.innerHTML = originalHTML;
+        refreshIcons();
+      }
+    });
+  }
+
+  // STEP 2: Verify OTP Only (Server-authoritative check)
+  if (formOtp) {
+    formOtp.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorAlert = document.getElementById('forgot-otp-error-alert');
+      const successAlert = document.getElementById('forgot-otp-success-alert');
+      const submitBtn = document.getElementById('btn-verify-forgot-otp');
+      const btnContent = document.getElementById('btn-verify-forgot-otp-content');
+
+      const otp = getOtpValue();
+
+      if (errorAlert) errorAlert.style.display = 'none';
+      if (successAlert) successAlert.style.display = 'none';
+
+      const wrapper = document.getElementById('otp-3d-wrapper');
+      const shieldIcon = document.getElementById('otp-shield-icon');
+
+      if (!/^\d{6}$/.test(otp)) {
+        if (wrapper) {
+          wrapper.classList.remove('otp-error-state', 'otp-success-state');
+          void wrapper.offsetWidth; // Force DOM reflow to re-trigger CSS keyframe
+          wrapper.classList.add('otp-error-state');
+        }
+        if (errorAlert) {
+          errorAlert.textContent = 'Please enter the complete 6-digit numeric verification code.';
+          errorAlert.style.display = 'block';
+        }
+        return;
+      }
+
+      submitBtn.disabled = true;
+      const originalHTML = btnContent.innerHTML;
+      btnContent.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 18px; height: 18px;"></i> Verifying Code...';
+      refreshIcons();
+
+      try {
+        const res = await api.verifyResetOtp(forgotPasswordState.verificationId, otp);
+
+        if (forgotPasswordState.timerInterval) {
+          clearInterval(forgotPasswordState.timerInterval);
+          forgotPasswordState.timerInterval = null;
+        }
+
+        forgotPasswordState.resetToken = res.resetToken;
+
+        // Trigger 3D Success Celebration Animation
+        if (wrapper) {
+          wrapper.classList.remove('otp-error-state');
+          void wrapper.offsetWidth; // Force reflow
+          wrapper.classList.add('otp-success-state');
+        }
+
+        if (shieldIcon) {
+          shieldIcon.innerHTML = '<i data-lucide="check-circle" style="width: 32px; height: 32px; color: #ffffff;"></i>';
+          refreshIcons();
+        }
+
+        btnContent.innerHTML = '<i data-lucide="check" style="width: 18px; height: 18px;"></i> Verified Successfully!';
+        refreshIcons();
+
+        // Allow user to experience the celebratory 3D cascade and spin animation before view change
+        await new Promise(r => setTimeout(r, 750));
+
+        // Transition from Step 2 to Step 3 (Set New Password)
+        document.getElementById('forgot-step-otp').style.display = 'none';
+        document.getElementById('forgot-step-newpass').style.display = 'block';
+
+        const newPassInput = document.getElementById('forgot-new-password');
+        if (newPassInput) setTimeout(() => newPassInput.focus(), 100);
+        refreshIcons();
+      } catch (err) {
+        // Trigger 3D Error Shake & Jiggle Animation
+        if (wrapper) {
+          wrapper.classList.remove('otp-success-state', 'otp-error-state');
+          void wrapper.offsetWidth; // Force reflow
+          wrapper.classList.add('otp-error-state');
+        }
+
+        if (shieldIcon) {
+          shieldIcon.innerHTML = '<i data-lucide="shield-alert" style="width: 28px; height: 28px; color: #ffffff;"></i>';
+          refreshIcons();
+        }
+
+        if (errorAlert) {
+          errorAlert.textContent = err.message || 'Verification code failed. Please check the code and try again.';
+          errorAlert.style.display = 'block';
+        }
+      } finally {
+        submitBtn.disabled = false;
+        btnContent.innerHTML = originalHTML;
+        refreshIcons();
+      }
+    });
+  }
+
+  // STEP 3: Update Password (Submits verified resetToken)
+  if (formNewPass) {
+    formNewPass.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const newPassInput = document.getElementById('forgot-new-password');
+      const confirmPassInput = document.getElementById('forgot-confirm-password');
+      const errorAlert = document.getElementById('forgot-newpass-error-alert');
+      const successAlert = document.getElementById('forgot-newpass-success-alert');
+      const submitBtn = document.getElementById('btn-submit-reset-password');
+      const btnContent = document.getElementById('btn-submit-reset-password-content');
+
+      const newPassword = newPassInput ? newPassInput.value : '';
+      const confirmPassword = confirmPassInput ? confirmPassInput.value : '';
+
+      if (errorAlert) errorAlert.style.display = 'none';
+      if (successAlert) successAlert.style.display = 'none';
+
+      if (newPassword.length < 6) {
+        if (errorAlert) {
+          errorAlert.textContent = 'New password must be at least 6 characters long.';
+          errorAlert.style.display = 'block';
+        }
+        return;
+      }
+
+      if (newPassword !== confirmPassword) {
+        if (errorAlert) {
+          errorAlert.textContent = 'Passwords do not match. Please verify and re-enter.';
+          errorAlert.style.display = 'block';
+        }
+        return;
+      }
+
+      submitBtn.disabled = true;
+      const originalHTML = btnContent.innerHTML;
+      btnContent.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 18px; height: 18px;"></i> Updating Password...';
+      refreshIcons();
+
+      try {
+        const res = await api.resetPasswordFinal(
+          forgotPasswordState.resetToken, 
+          newPassword, 
+          confirmPassword
+        );
+
+        if (successAlert) {
+          successAlert.innerHTML = `<strong>Success!</strong> ${res.message || 'Password updated successfully!'}`;
+          successAlert.style.display = 'block';
+        }
+
+        setTimeout(() => {
+          if (currentUser) {
+            navigate('/profile');
+          } else {
+            navigate('/login');
+          }
+        }, 1500);
+      } catch (err) {
+        if (errorAlert) {
+          errorAlert.textContent = err.message || 'Failed to update password. Please try resetting your password again.';
+          errorAlert.style.display = 'block';
+        }
+      } finally {
+        submitBtn.disabled = false;
+        btnContent.innerHTML = originalHTML;
+        refreshIcons();
+      }
+    });
+  }
+
+  // Resend Code button (Calls Server-Side Resend API)
+  if (resendBtn) {
+    resendBtn.addEventListener('click', async () => {
+      const errorAlert = document.getElementById('forgot-otp-error-alert');
+      const successAlert = document.getElementById('forgot-otp-success-alert');
+      if (errorAlert) errorAlert.style.display = 'none';
+      if (successAlert) successAlert.style.display = 'none';
+
+      resendBtn.disabled = true;
+      resendBtn.textContent = 'Sending...';
+
+      try {
+        const res = await api.resendOtp(forgotPasswordState.verificationId);
+
+        if (successAlert) {
+          successAlert.textContent = res.message || 'A new verification code has been dispatched to your email.';
+          successAlert.style.display = 'block';
+        }
+        clearOtpBoxes();
+        startOtpResendTimer(res.cooldownSeconds || 60);
+      } catch (err) {
+        if (errorAlert) {
+          errorAlert.textContent = err.message || 'Failed to resend code.';
+          errorAlert.style.display = 'block';
+        }
+        resendBtn.disabled = false;
+        resendBtn.textContent = 'Resend Code';
+      }
+    });
+  }
+
+  // Back to Phone Step
+  if (backToPhoneBtn) {
+    backToPhoneBtn.addEventListener('click', () => {
+      renderForgotPasswordView();
+    });
+  }
+
+  // Password visibility toggles
+  if (showNewPassBtn) {
+    showNewPassBtn.addEventListener('click', () => {
+      const input = document.getElementById('forgot-new-password');
+      const icon = showNewPassBtn.querySelector('i');
+      if (!input) return;
+      if (input.type === 'password') {
+        input.type = 'text';
+        if (icon) icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        input.type = 'password';
+        if (icon) icon.setAttribute('data-lucide', 'eye');
+      }
+      refreshIcons();
+    });
+  }
+
+  if (showConfirmPassBtn) {
+    showConfirmPassBtn.addEventListener('click', () => {
+      const input = document.getElementById('forgot-confirm-password');
+      const icon = showConfirmPassBtn.querySelector('i');
+      if (!input) return;
+      if (input.type === 'password') {
+        input.type = 'text';
+        if (icon) icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        input.type = 'password';
+        if (icon) icon.setAttribute('data-lucide', 'eye');
+      }
+      refreshIcons();
+    });
+  }
+}
+
+// --- ADMIN EDIT USER EMAIL MODAL CONTROLLER ---
+function openAdminEditEmailModal({ userId, phone, name, email }) {
+  const modal = document.getElementById('modal-admin-edit-email');
+  const errorAlert = document.getElementById('admin-edit-email-error');
+  const successAlert = document.getElementById('admin-edit-email-success');
+  const idInput = document.getElementById('admin-edit-email-user-id');
+  const phoneInput = document.getElementById('admin-edit-email-user-phone');
+  const nameEl = document.getElementById('admin-edit-email-user-name');
+  const phoneEl = document.getElementById('admin-edit-email-user-phone-display');
+  const emailInput = document.getElementById('admin-edit-email-input');
+
+  if (!modal) return;
+
+  if (errorAlert) errorAlert.style.display = 'none';
+  if (successAlert) successAlert.style.display = 'none';
+
+  if (idInput) idInput.value = userId || '';
+  if (phoneInput) phoneInput.value = phone || '';
+  if (nameEl) nameEl.textContent = capitalizeName(name || 'User');
+  if (phoneEl) phoneEl.textContent = phone || 'N/A';
+  if (emailInput) {
+    emailInput.value = email || '';
+    setTimeout(() => emailInput.focus(), 150);
+  }
+
+  modal.style.display = 'flex';
+  refreshIcons();
+}
+
+function closeAdminEditEmailModal() {
+  const modal = document.getElementById('modal-admin-edit-email');
+  if (modal) modal.style.display = 'none';
+}
+
+function initAdminEmailModalEventHandlers() {
+  const modal = document.getElementById('modal-admin-edit-email');
+  const closeBtn = document.getElementById('modal-admin-edit-email-close');
+  const cancelBtn = document.getElementById('btn-admin-edit-email-cancel');
+  const form = document.getElementById('form-admin-edit-email');
+
+  if (closeBtn) closeBtn.addEventListener('click', closeAdminEditEmailModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeAdminEditEmailModal);
+
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeAdminEditEmailModal();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.style.display !== 'none') {
+        closeAdminEditEmailModal();
+      }
+    });
+  }
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const userId = document.getElementById('admin-edit-email-user-id').value;
+      const phone = document.getElementById('admin-edit-email-user-phone').value;
+      const emailInput = document.getElementById('admin-edit-email-input');
+      const errorAlert = document.getElementById('admin-edit-email-error');
+      const successAlert = document.getElementById('admin-edit-email-success');
+      const submitBtn = document.getElementById('btn-admin-edit-email-submit');
+
+      const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      if (errorAlert) errorAlert.style.display = 'none';
+      if (successAlert) successAlert.style.display = 'none';
+
+      if (!email || !emailRegex.test(email)) {
+        if (errorAlert) {
+          errorAlert.textContent = 'Please enter a valid email address.';
+          errorAlert.style.display = 'block';
+        }
+        return;
+      }
+
+      submitBtn.disabled = true;
+      const originalHTML = submitBtn.innerHTML;
+      submitBtn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i> Saving...';
+      refreshIcons();
+
+      try {
+        let res;
+        if (userId) {
+          res = await api.adminUpdateUserEmail(userId, email);
+        } else if (phone) {
+          res = await api.adminUpdateUserEmailByPhone(phone, email);
+        } else {
+          throw new Error('Missing user ID or phone number.');
+        }
+
+        if (successAlert) {
+          successAlert.textContent = res.message || 'Email updated successfully!';
+          successAlert.style.display = 'block';
+        }
+
+        // Refresh admin dashboard to show updated email
+        setTimeout(async () => {
+          closeAdminEditEmailModal();
+          if (typeof window._refreshAdminUserDirectory === 'function') {
+            await window._refreshAdminUserDirectory(true);
+          } else if (typeof renderAdminDashboardView === 'function') {
+            await renderAdminDashboardView();
+          }
+        }, 800);
+      } catch (err) {
+        if (errorAlert) {
+          errorAlert.textContent = err.message || 'Failed to update email.';
+          errorAlert.style.display = 'block';
+        }
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalHTML;
+        refreshIcons();
+      }
+    });
+  }
+}
+
+// ==========================================================================
+// SUPER ADMIN USER CSV EXPORT CONTROLLER
+// ==========================================================================
+
+const USER_EXPORT_FIELDS_CONFIG = [
+  // Basic Details
+  { id: 'name', label: 'Full Name', group: 'Basic Details', default: true },
+  { id: 'phone', label: 'Phone Number', group: 'Basic Details', default: true },
+  { id: 'email', label: 'Email Address', group: 'Basic Details', default: true },
+  { id: 'role', label: 'Role', group: 'Basic Details', default: true },
+  { id: 'approved', label: 'Approval Status', group: 'Basic Details', default: true },
+  { id: 'id', label: 'User ID', group: 'Basic Details', default: false },
+
+  // Activity & Timestamps
+  { id: 'createdAt', label: 'Registration Date', group: 'Activity & Stats', default: true },
+  { id: 'lastLogin', label: 'Last Login Date', group: 'Activity & Stats', default: false },
+  { id: 'lastActive', label: 'Last Active Date', group: 'Activity & Stats', default: false },
+  { id: 'points', label: 'Teacher Points', group: 'Activity & Stats', default: false },
+  { id: 'uploadsCount', label: 'Uploads Count', group: 'Activity & Stats', default: false },
+
+  // Device & Network
+  { id: 'browser', label: 'Browser', group: 'Device & Network', default: false },
+  { id: 'os', label: 'Operating System', group: 'Device & Network', default: false },
+  { id: 'deviceType', label: 'Device Type', group: 'Device & Network', default: false },
+  { id: 'deviceModel', label: 'Device Model', group: 'Device & Network', default: false },
+  { id: 'ip', label: 'IP Address', group: 'Device & Network', default: false }
+];
+
+let exportSelectedRole = 'all';
+let exportSelectedStatus = 'all';
+let exportSelectedFields = new Set(['name', 'phone', 'email', 'role', 'approved', 'createdAt']);
+let exportSelectedUserIds = new Set();
+let exportCurrentLimit = 'all';
+let exportUserListSearchQuery = '';
+let exportIsPreviewOpen = false;
+let exportUsersCache = [];
+
+function downloadBlob(blob, filename) {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.style.display = 'none';
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }, 200);
+}
+
+function renderExportFieldsGrid() {
+  const container = document.getElementById('export-fields-container');
+  if (!container) return;
+
+  container.innerHTML = USER_EXPORT_FIELDS_CONFIG.map(field => {
+    const isChecked = exportSelectedFields.has(field.id);
+    return `
+      <label class="export-field-item ${isChecked ? 'checked' : ''}" data-field-id="${field.id}">
+        <input type="checkbox" value="${field.id}" ${isChecked ? 'checked' : ''} />
+        <span>${escapeHTML(field.label)}</span>
+      </label>
+    `;
+  }).join('');
+
+  container.querySelectorAll('.export-field-item input[type="checkbox"]').forEach(checkbox => {
+    checkbox.addEventListener('change', (e) => {
+      const fieldId = e.target.value;
+      const parentLabel = e.target.closest('.export-field-item');
+      if (e.target.checked) {
+        exportSelectedFields.add(fieldId);
+        if (parentLabel) parentLabel.classList.add('checked');
+      } else {
+        exportSelectedFields.delete(fieldId);
+        if (parentLabel) parentLabel.classList.remove('checked');
+      }
+      updateExportModalState();
+    });
+  });
+}
+
+function applyExportPreset(presetType) {
+  exportSelectedFields.clear();
+
+  if (presetType === 'names') {
+    // Only Names: user requested: "like if i want only names then i'll select ony name"
+    exportSelectedFields.add('name');
+  } else if (presetType === 'name_email') {
+    // Name & Email: user requested: "if i want only name email and this only"
+    exportSelectedFields.add('name');
+    exportSelectedFields.add('email');
+  } else if (presetType === 'contact') {
+    // Name, Phone & Email: user requested: "and if i need email phone name and other thing alsi"
+    exportSelectedFields.add('name');
+    exportSelectedFields.add('phone');
+    exportSelectedFields.add('email');
+  } else if (presetType === 'essential') {
+    // Standard profile
+    ['name', 'phone', 'email', 'role', 'approved', 'createdAt'].forEach(f => exportSelectedFields.add(f));
+  } else if (presetType === 'all') {
+    // Whole Data: user requested: "and if i want all data then whole data"
+    USER_EXPORT_FIELDS_CONFIG.forEach(f => exportSelectedFields.add(f.id));
+  } else if (presetType === 'none') {
+    // Deselect all
+  }
+
+  // Update DOM checkboxes
+  const container = document.getElementById('export-fields-container');
+  if (container) {
+    container.querySelectorAll('.export-field-item').forEach(item => {
+      const fieldId = item.getAttribute('data-field-id');
+      const input = item.querySelector('input');
+      const isChecked = exportSelectedFields.has(fieldId);
+      if (input) input.checked = isChecked;
+      if (isChecked) item.classList.add('checked');
+      else item.classList.remove('checked');
+    });
+  }
+
+  updateExportModalState();
+}
+
+function getFilteredExportUsers() {
+  let list = Array.isArray(exportUsersCache) ? [...exportUsersCache] : [];
+
+  // Filter by role
+  if (exportSelectedRole !== 'all') {
+    if (exportSelectedRole === 'admins') {
+      list = list.filter(u => u.role === 'admin' || u.role === 'superadmin');
+    } else {
+      list = list.filter(u => u.role === exportSelectedRole);
+    }
+  }
+
+  // Filter by status
+  if (exportSelectedStatus === 'approved') {
+    list = list.filter(u => u.approved === true);
+  } else if (exportSelectedStatus === 'pending') {
+    list = list.filter(u => u.approved === false);
+  }
+
+  // Apply active search if checked
+  const applySearch = document.getElementById('export-apply-active-search')?.checked;
+  if (applySearch && typeof adminUserSearchQuery === 'string' && adminUserSearchQuery.trim()) {
+    const q = adminUserSearchQuery.toLowerCase().trim();
+    list = list.filter(u => {
+      const name = (u.name || '').toLowerCase();
+      const phone = (u.phone || '').toLowerCase();
+      const email = (u.email || '').toLowerCase();
+      return name.includes(q) || phone.includes(q) || email.includes(q);
+    });
+  }
+
+  return list;
+}
+
+function renderExportUsersPicker() {
+  const container = document.getElementById('export-users-picker-container');
+  const badgeEl = document.getElementById('export-user-picked-badge');
+  if (!container) return;
+
+  const baseUsers = getFilteredExportUsers();
+  let displayUsers = baseUsers;
+
+  if (exportUserListSearchQuery && exportUserListSearchQuery.trim()) {
+    const q = exportUserListSearchQuery.toLowerCase().trim();
+    displayUsers = baseUsers.filter(u => {
+      const name = (u.name || '').toLowerCase();
+      const phone = (u.phone || '').toLowerCase();
+      const email = (u.email || '').toLowerCase();
+      return name.includes(q) || phone.includes(q) || email.includes(q);
+    });
+  }
+
+  if (displayUsers.length === 0) {
+    container.innerHTML = `<div style="padding: 14px; text-align: center; color: var(--text-muted); font-size: 12px;">No users found matching current filters.</div>`;
+    if (badgeEl) badgeEl.textContent = `0 of ${baseUsers.length} users included`;
+    return;
+  }
+
+  container.innerHTML = displayUsers.map(u => {
+    const uid = String(u.id || u._id);
+    const isIncluded = exportSelectedUserIds.has(uid);
+    const roleBadgeColor = u.role === 'superadmin' ? '#ef4444' : (u.role === 'educator' ? '#10b981' : (u.role === 'admin' ? '#6366f1' : '#3b82f6'));
+    const roleLabel = u.role === 'superadmin' ? 'Super Admin' : (u.role === 'educator' ? 'Teacher' : (u.role === 'admin' ? 'Admin' : 'Student'));
+
+    return `
+      <div class="export-user-picker-item ${isIncluded ? 'included' : 'excluded'}" data-user-id="${uid}">
+        <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
+          <input type="checkbox" value="${uid}" ${isIncluded ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: #10b981; cursor: pointer; flex-shrink: 0;" />
+          <div style="min-width: 0; flex: 1;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <strong style="font-size: 13px; color: var(--text-main);">${escapeHTML(capitalizeName(u.name))}</strong>
+              <span style="font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: ${roleBadgeColor}18; color: ${roleBadgeColor}; text-transform: uppercase;">
+                ${roleLabel}
+              </span>
+              <span style="font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: ${u.approved ? '#dcfce7' : '#fee2e2'}; color: ${u.approved ? '#166534' : '#991b1b'};">
+                ${u.approved ? 'Approved' : 'Pending'}
+              </span>
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px;">
+              <span>Phone: ${escapeHTML(u.phone)}</span>
+              ${u.email ? `<span>&bull; ${escapeHTML(u.email)}</span>` : ''}
+            </div>
+          </div>
+        </div>
+        <div>
+          <button type="button" class="btn btn-sm btn-export-user-toggle" data-user-id="${uid}" style="font-size: 11px; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: ${isIncluded ? 'transparent' : 'rgba(16, 185, 129, 0.1)'}; color: ${isIncluded ? 'var(--text-muted)' : '#059669'}; cursor: pointer;">
+            ${isIncluded ? 'Exclude' : '+ Include'}
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  if (badgeEl) {
+    const includedCount = baseUsers.filter(u => exportSelectedUserIds.has(String(u.id || u._id))).length;
+    badgeEl.textContent = `${includedCount} of ${baseUsers.length} users included`;
+  }
+
+  // Row click & toggle listener
+  container.querySelectorAll('.export-user-picker-item').forEach(row => {
+    const uid = row.getAttribute('data-user-id');
+    const checkbox = row.querySelector('input[type="checkbox"]');
+    const toggleBtn = row.querySelector('.btn-export-user-toggle');
+
+    const toggleUser = (forceState = null) => {
+      const currentlyChecked = exportSelectedUserIds.has(uid);
+      const nextState = (forceState !== null) ? forceState : !currentlyChecked;
+
+      if (nextState) {
+        exportSelectedUserIds.add(uid);
+        row.classList.add('included');
+        row.classList.remove('excluded');
+        if (checkbox) checkbox.checked = true;
+        if (toggleBtn) {
+          toggleBtn.textContent = 'Exclude';
+          toggleBtn.style.color = 'var(--text-muted)';
+          toggleBtn.style.background = 'transparent';
+        }
+      } else {
+        exportSelectedUserIds.delete(uid);
+        row.classList.remove('included');
+        row.classList.add('excluded');
+        if (checkbox) checkbox.checked = false;
+        if (toggleBtn) {
+          toggleBtn.textContent = '+ Include';
+          toggleBtn.style.color = '#059669';
+          toggleBtn.style.background = 'rgba(16, 185, 129, 0.1)';
+        }
+      }
+
+      if (badgeEl) {
+        const includedCount = baseUsers.filter(u => exportSelectedUserIds.has(String(u.id || u._id))).length;
+        badgeEl.textContent = `${includedCount} of ${baseUsers.length} users included`;
+      }
+      updateExportModalState();
+    };
+
+    if (checkbox) {
+      checkbox.addEventListener('change', (e) => {
+        toggleUser(e.target.checked);
+      });
+    }
+
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleUser();
+      });
+    }
+
+    row.addEventListener('click', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+      toggleUser();
+    });
+  });
+}
+
+function applyExportLimit(limitVal) {
+  exportCurrentLimit = limitVal;
+
+  document.querySelectorAll('.export-limit-btn').forEach(btn => {
+    if (btn.getAttribute('data-limit') === String(limitVal)) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+
+  const baseUsers = getFilteredExportUsers();
+  exportSelectedUserIds.clear();
+
+  if (limitVal === 'all') {
+    baseUsers.forEach(u => exportSelectedUserIds.add(String(u.id || u._id)));
+  } else {
+    const num = parseInt(limitVal, 10);
+    if (!isNaN(num) && num > 0) {
+      baseUsers.slice(0, num).forEach(u => exportSelectedUserIds.add(String(u.id || u._id)));
+    } else {
+      baseUsers.forEach(u => exportSelectedUserIds.add(String(u.id || u._id)));
+    }
+  }
+
+  renderExportUsersPicker();
+  updateExportModalState();
+}
+
+function updateExportModalState() {
+  const baseUsers = getFilteredExportUsers();
+  const selectedUsersCount = baseUsers.filter(u => exportSelectedUserIds.has(String(u.id || u._id))).length;
+  const selectedColsCount = exportSelectedFields.size;
+
+  const roleIndicator = document.getElementById('export-role-count-indicator');
+  if (roleIndicator) {
+    roleIndicator.textContent = `${baseUsers.length} total in category`;
+  }
+
+  const badgeEl = document.getElementById('export-user-picked-badge');
+  if (badgeEl) {
+    badgeEl.textContent = `${selectedUsersCount} of ${baseUsers.length} users included`;
+  }
+
+  const summaryCount = document.getElementById('export-summary-count');
+  if (summaryCount) summaryCount.textContent = selectedUsersCount;
+
+  const summaryFields = document.getElementById('export-summary-fields');
+  if (summaryFields) summaryFields.textContent = selectedColsCount;
+
+  // Validation
+  const errorEl = document.getElementById('export-field-error');
+  const downloadBtn = document.getElementById('btn-modal-export-users-download');
+
+  const hasColumns = selectedColsCount > 0;
+  const hasUsers = selectedUsersCount > 0;
+
+  if (!hasColumns) {
+    if (errorEl) {
+      errorEl.textContent = 'Please select at least one field to export.';
+      errorEl.style.display = 'block';
+    }
+    if (downloadBtn) {
+      downloadBtn.disabled = true;
+      downloadBtn.style.opacity = '0.5';
+      downloadBtn.style.cursor = 'not-allowed';
+    }
+  } else if (!hasUsers) {
+    if (errorEl) {
+      errorEl.textContent = 'Please select at least one user to export.';
+      errorEl.style.display = 'block';
+    }
+    if (downloadBtn) {
+      downloadBtn.disabled = true;
+      downloadBtn.style.opacity = '0.5';
+      downloadBtn.style.cursor = 'not-allowed';
+    }
+  } else {
+    if (errorEl) errorEl.style.display = 'none';
+    if (downloadBtn) {
+      downloadBtn.disabled = false;
+      downloadBtn.style.opacity = '1';
+      downloadBtn.style.cursor = 'pointer';
+    }
+  }
+
+  // Update Preview Table if open
+  if (exportIsPreviewOpen) {
+    const includedUsers = baseUsers.filter(u => exportSelectedUserIds.has(String(u.id || u._id)));
+    updateExportPreviewTable(includedUsers);
+  }
+}
+
+function updateExportPreviewTable(filteredUsers = null) {
+  if (!filteredUsers) {
+    const baseUsers = getFilteredExportUsers();
+    filteredUsers = baseUsers.filter(u => exportSelectedUserIds.has(String(u.id || u._id)));
+  }
+
+  const thead = document.getElementById('export-preview-thead');
+  const tbody = document.getElementById('export-preview-tbody');
+  if (!thead || !tbody) return;
+
+  const activeFields = USER_EXPORT_FIELDS_CONFIG.filter(f => exportSelectedFields.has(f.id));
+
+  if (activeFields.length === 0) {
+    thead.innerHTML = '';
+    tbody.innerHTML = '<tr><td style="padding: 12px; color: #ef4444; text-align: center;">No columns selected. Check at least one column above.</td></tr>';
+    return;
+  }
+
+  // Table header
+  thead.innerHTML = `<tr>${activeFields.map(f => `<th>${escapeHTML(f.label)}</th>`).join('')}</tr>`;
+
+  // Sample rows (up to 4 rows)
+  const sampleUsers = filteredUsers.slice(0, 4);
+  if (sampleUsers.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="${activeFields.length}" style="padding: 14px; text-align: center; color: var(--text-muted);">No users selected for export.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = sampleUsers.map(u => {
+    return `
+      <tr>
+        ${activeFields.map(f => {
+          let val = '';
+          if (f.id === 'id') val = u.id || u._id || '';
+          else if (f.id === 'name') val = capitalizeName(u.name || '');
+          else if (f.id === 'phone') val = u.phone || '';
+          else if (f.id === 'email') val = u.email || '<span style="color:var(--text-muted);font-style:italic;">None</span>';
+          else if (f.id === 'role') val = u.role === 'superadmin' ? 'Super Admin' : (u.role === 'educator' ? 'Teacher' : (u.role === 'admin' ? 'Admin' : 'Student'));
+          else if (f.id === 'approved') val = u.approved ? 'Approved' : 'Pending';
+          else if (f.id === 'createdAt') val = u.createdAt ? new Date(u.createdAt).toISOString().replace('T', ' ').slice(0, 19) : '';
+          else if (f.id === 'lastLogin') val = u.lastLogin ? new Date(u.lastLogin).toISOString().replace('T', ' ').slice(0, 19) : 'Never';
+          else if (f.id === 'lastActive') val = u.lastActive ? new Date(u.lastActive).toISOString().replace('T', ' ').slice(0, 19) : 'Never';
+          else if (f.id === 'points') val = (u.role === 'educator' && typeof u.points === 'number') ? u.points : (u.role === 'educator' ? 0 : 'N/A');
+          else if (f.id === 'uploadsCount') val = (u.role === 'educator' && typeof u.uploadsCount === 'number') ? u.uploadsCount : (u.role === 'educator' ? 0 : 'N/A');
+          else if (f.id === 'browser') val = u.deviceInfo?.browser || 'Unknown';
+          else if (f.id === 'os') val = u.deviceInfo?.os || 'Unknown';
+          else if (f.id === 'deviceType') val = u.deviceInfo?.deviceType || 'Unknown';
+          else if (f.id === 'deviceModel') val = u.deviceInfo?.deviceModel || 'Unknown';
+          else if (f.id === 'ip') val = u.deviceInfo?.ip || 'Unknown';
+
+          return `<td>${typeof val === 'string' && val.startsWith('<span') ? val : escapeHTML(String(val))}</td>`;
+        }).join('')}
+      </tr>
+    `;
+  }).join('');
+}
+
+async function openExportUsersModal(initialRole = 'all') {
+  if (!currentUser || currentUser.role !== 'superadmin') {
+    alert('Access Denied: User CSV Export is strictly reserved for Super Admins.');
+    return;
+  }
+
+  const modal = document.getElementById('modal-export-users');
+  if (!modal) return;
+
+  // Set selected role
+  exportSelectedRole = initialRole || 'all';
+  exportSelectedStatus = 'all';
+  exportCurrentLimit = 'all';
+  exportUserListSearchQuery = '';
+
+  // Update role buttons
+  document.querySelectorAll('.export-role-btn').forEach(btn => {
+    if (btn.getAttribute('data-role') === exportSelectedRole) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+
+  // Reset limit buttons
+  document.querySelectorAll('.export-limit-btn').forEach(btn => {
+    if (btn.getAttribute('data-limit') === 'all') {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+  const customLimitInput = document.getElementById('export-custom-limit-input');
+  if (customLimitInput) customLimitInput.value = '';
+
+  const userSearchInput = document.getElementById('export-user-list-search');
+  if (userSearchInput) userSearchInput.value = '';
+
+  // Reset status dropdown
+  const statusSelect = document.getElementById('export-filter-status');
+  if (statusSelect) statusSelect.value = 'all';
+
+  // Update active search label and state
+  const searchCheck = document.getElementById('export-apply-active-search');
+  const searchLabel = document.getElementById('export-active-search-label');
+  if (searchLabel) {
+    searchLabel.textContent = (typeof adminUserSearchQuery === 'string' && adminUserSearchQuery.trim()) 
+      ? `"${adminUserSearchQuery}"` 
+      : 'none';
+  }
+  if (searchCheck) {
+    searchCheck.checked = Boolean(typeof adminUserSearchQuery === 'string' && adminUserSearchQuery.trim());
+  }
+
+  // Pre-load or use cached users
+  if (!exportUsersCache || exportUsersCache.length === 0) {
+    try {
+      exportUsersCache = await api.getAllUsers();
+    } catch (err) {
+      console.warn('Could not pre-load users for export preview', err);
+    }
+  }
+
+  // Update category badges
+  if (Array.isArray(exportUsersCache) && exportUsersCache.length > 0) {
+    const all = exportUsersCache;
+    const badgeAll = document.getElementById('export-badge-all');
+    const badgeStudent = document.getElementById('export-badge-student');
+    const badgeEducator = document.getElementById('export-badge-educator');
+    const badgeAdmins = document.getElementById('export-badge-admins');
+    const badgeSuperadmin = document.getElementById('export-badge-superadmin');
+
+    if (badgeAll) badgeAll.textContent = all.length;
+    if (badgeStudent) badgeStudent.textContent = all.filter(u => u.role === 'student').length;
+    if (badgeEducator) badgeEducator.textContent = all.filter(u => u.role === 'educator').length;
+    if (badgeAdmins) badgeAdmins.textContent = all.filter(u => u.role === 'admin' || u.role === 'superadmin').length;
+    if (badgeSuperadmin) badgeSuperadmin.textContent = all.filter(u => u.role === 'superadmin').length;
+  }
+
+  // Select all matching users initially
+  const baseUsers = getFilteredExportUsers();
+  exportSelectedUserIds = new Set(baseUsers.map(u => String(u.id || u._id)));
+
+  renderExportUsersPicker();
+  renderExportFieldsGrid();
+  updateExportModalState();
+
+  modal.style.display = 'flex';
+  refreshIcons();
+}
+
+function closeExportUsersModal() {
+  const modal = document.getElementById('modal-export-users');
+  if (modal) modal.style.display = 'none';
+}
+
+function initUserExportEventHandlers() {
+  const modal = document.getElementById('modal-export-users');
+  const openBtn = document.getElementById('btn-open-export-users-modal');
+  const closeBtn = document.getElementById('modal-export-users-close');
+  const cancelBtn = document.getElementById('btn-modal-export-users-cancel');
+  const downloadBtn = document.getElementById('btn-modal-export-users-download');
+  const togglePreviewBtn = document.getElementById('btn-toggle-export-preview');
+  const previewWrapper = document.getElementById('export-preview-table-wrapper');
+  const previewToggleText = document.getElementById('export-preview-toggle-text');
+  const statusSelect = document.getElementById('export-filter-status');
+  const searchCheck = document.getElementById('export-apply-active-search');
+  const userSearchInput = document.getElementById('export-user-list-search');
+  const selectAllUsersBtn = document.getElementById('btn-export-users-select-all');
+  const deselectAllUsersBtn = document.getElementById('btn-export-users-deselect-all');
+  const customLimitInput = document.getElementById('export-custom-limit-input');
+
+  if (openBtn) {
+    openBtn.addEventListener('click', () => openExportUsersModal('all'));
+  }
+
+  if (closeBtn) closeBtn.addEventListener('click', closeExportUsersModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeExportUsersModal);
+
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeExportUsersModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.style.display !== 'none') {
+        closeExportUsersModal();
+      }
+    });
+  }
+
+  // Role selector buttons
+  document.querySelectorAll('.export-role-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.export-role-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      exportSelectedRole = btn.getAttribute('data-role') || 'all';
+
+      // Re-populate selected user IDs for the new role
+      const baseUsers = getFilteredExportUsers();
+      if (exportCurrentLimit === 'all') {
+        exportSelectedUserIds = new Set(baseUsers.map(u => String(u.id || u._id)));
+      } else {
+        const num = parseInt(exportCurrentLimit, 10);
+        exportSelectedUserIds = new Set(baseUsers.slice(0, num || baseUsers.length).map(u => String(u.id || u._id)));
+      }
+
+      renderExportUsersPicker();
+      updateExportModalState();
+    });
+  });
+
+  // Limit buttons
+  document.querySelectorAll('.export-limit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const limitVal = btn.getAttribute('data-limit');
+      if (customLimitInput) customLimitInput.value = '';
+      applyExportLimit(limitVal);
+    });
+  });
+
+  // Custom limit input
+  if (customLimitInput) {
+    customLimitInput.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      if (!isNaN(val) && val > 0) {
+        document.querySelectorAll('.export-limit-btn').forEach(b => b.classList.remove('active'));
+        applyExportLimit(val);
+      } else if (!e.target.value) {
+        applyExportLimit('all');
+      }
+    });
+  }
+
+  // In-list user search filter
+  if (userSearchInput) {
+    userSearchInput.addEventListener('input', (e) => {
+      exportUserListSearchQuery = e.target.value;
+      renderExportUsersPicker();
+    });
+  }
+
+  // Select all / Deselect all users in current category
+  if (selectAllUsersBtn) {
+    selectAllUsersBtn.addEventListener('click', () => {
+      const baseUsers = getFilteredExportUsers();
+      baseUsers.forEach(u => exportSelectedUserIds.add(String(u.id || u._id)));
+      renderExportUsersPicker();
+      updateExportModalState();
+    });
+  }
+
+  if (deselectAllUsersBtn) {
+    deselectAllUsersBtn.addEventListener('click', () => {
+      exportSelectedUserIds.clear();
+      renderExportUsersPicker();
+      updateExportModalState();
+    });
+  }
+
+  // Status filter change
+  if (statusSelect) {
+    statusSelect.addEventListener('change', (e) => {
+      exportSelectedStatus = e.target.value;
+      const baseUsers = getFilteredExportUsers();
+      exportSelectedUserIds = new Set(baseUsers.map(u => String(u.id || u._id)));
+      renderExportUsersPicker();
+      updateExportModalState();
+    });
+  }
+
+  // Active search toggle
+  if (searchCheck) {
+    searchCheck.addEventListener('change', () => {
+      const baseUsers = getFilteredExportUsers();
+      exportSelectedUserIds = new Set(baseUsers.map(u => String(u.id || u._id)));
+      renderExportUsersPicker();
+      updateExportModalState();
+    });
+  }
+
+  // Preset buttons
+  document.querySelectorAll('.export-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const preset = btn.getAttribute('data-preset');
+      applyExportPreset(preset);
+    });
+  });
+
+  // Toggle Live Preview
+  if (togglePreviewBtn && previewWrapper) {
+    togglePreviewBtn.addEventListener('click', () => {
+      exportIsPreviewOpen = !exportIsPreviewOpen;
+      if (exportIsPreviewOpen) {
+        previewWrapper.style.display = 'block';
+        if (previewToggleText) previewToggleText.textContent = 'Hide Live Table Preview';
+        updateExportPreviewTable();
+      } else {
+        previewWrapper.style.display = 'none';
+        if (previewToggleText) previewToggleText.textContent = 'Show Live Table Preview';
+      }
+      refreshIcons();
+    });
+  }
+
+  // Download CSV button
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', async () => {
+      if (exportSelectedFields.size === 0) {
+        alert('Please select at least one field to export.');
+        return;
+      }
+
+      if (exportSelectedUserIds.size === 0) {
+        alert('Please select at least one user to export.');
+        return;
+      }
+
+      const originalHtml = downloadBtn.innerHTML;
+      downloadBtn.disabled = true;
+      downloadBtn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 16px; height: 16px;"></i> Generating CSV...';
+      refreshIcons();
+
+      try {
+        const applySearch = document.getElementById('export-apply-active-search')?.checked;
+        const searchQuery = (applySearch && typeof adminUserSearchQuery === 'string') ? adminUserSearchQuery : '';
+        const selectedFieldsArray = USER_EXPORT_FIELDS_CONFIG
+          .filter(f => exportSelectedFields.has(f.id))
+          .map(f => f.id);
+
+        const payload = {
+          role: exportSelectedRole,
+          status: exportSelectedStatus,
+          fields: selectedFieldsArray,
+          userIds: Array.from(exportSelectedUserIds),
+          search: searchQuery,
+          format: 'csv'
+        };
+
+        const { blob, filename } = await api.exportUsers(payload);
+        downloadBlob(blob, filename);
+
+        const count = exportSelectedUserIds.size;
+        alert(`Export successful! Downloaded ${count} users as ${filename}`);
+      } catch (err) {
+        alert(err.message || 'Failed to download user export CSV');
+      } finally {
+        downloadBtn.disabled = false;
+        downloadBtn.innerHTML = originalHtml;
+        refreshIcons();
+      }
+    });
+  }
+}
+
+
+async function renderReviewsView() {
+  const form = document.getElementById('form-review');
+  const existingContainer = document.getElementById('existing-review-container');
+  const errorAlert = document.getElementById('review-error-alert');
+  const successAlert = document.getElementById('review-success-alert');
+
+  if (errorAlert) errorAlert.style.display = 'none';
+  if (successAlert) successAlert.style.display = 'none';
+
+  if (!currentUser) {
+    navigate('/login');
+    return;
+  }
+
+  try {
+    const res = await api.getMyReview();
+    if (res.hasSubmitted) {
+      if (form) form.style.display = 'none';
+      if (existingContainer) {
+        existingContainer.style.display = 'block';
+        
+        // Render stars
+        const starsContainer = document.getElementById('existing-review-stars');
+        if (starsContainer) {
+          let starsHTML = '';
+          for (let i = 1; i <= 5; i++) {
+            const fillAttr = i <= res.review.rating ? 'fill="var(--warning)"' : 'fill="none"';
+            const color = i <= res.review.rating ? 'var(--warning)' : '#cbd5e1';
+            starsHTML += `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="${i <= res.review.rating ? 'var(--warning)' : 'none'}" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 24px; height: 24px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+          }
+          starsContainer.innerHTML = starsHTML;
+        }
+        const commentEl = document.getElementById('existing-review-comment');
+        if (commentEl) commentEl.textContent = res.review.comment || 'No comment provided.';
+        const dateEl = document.getElementById('existing-review-date');
+        if (dateEl) dateEl.textContent = new Date(res.review.createdAt).toLocaleString();
+      }
+    } else {
+      if (form) form.style.display = 'block';
+      if (existingContainer) existingContainer.style.display = 'none';
+      selectedReviewRating = 0;
+      updateStarRatingDisplay(0);
+    }
+  } catch (err) {
+    if (errorAlert) {
+      errorAlert.textContent = err.message || 'Error checking review status';
+      errorAlert.style.display = 'block';
+    }
+  }
+  refreshIcons();
+}
+
+async function renderContributorsView() {
+  const loading = document.getElementById('contributors-loading');
+  const errorAlert = document.getElementById('contributors-error-alert');
+  const wrapper = document.getElementById('contributors-list-wrapper');
+  const list = document.getElementById('contributors-ranking-list');
+
+  if (loading) loading.style.display = 'block';
+  if (errorAlert) errorAlert.style.display = 'none';
+  if (wrapper) wrapper.style.display = 'none';
+
+
+
+  try {
+    const contributors = await api.getContributors();
+    
+    if (loading) loading.style.display = 'none';
+    if (wrapper) wrapper.style.display = 'block';
+    
+    if (!contributors || contributors.length === 0) {
+      if (list) {
+        list.innerHTML = `
+          <div style="text-align: center; padding: 40px 16px; color: var(--text-muted);">
+            <i data-lucide="users" style="width: 48px; height: 48px; opacity: 0.3; margin-bottom: 12px; stroke-width: 1.5;"></i>
+            <h4 style="margin: 0 0 6px 0; font-size: 15px; font-weight: 600; color: var(--text-main);">No Contributors Yet</h4>
+            <p style="margin: 0; font-size: 13px;">Upload notes, lab manuals or PYQs to see your name on the board!</p>
+          </div>
+        `;
+      }
+      refreshIcons();
+      return;
+    }
+
+    const showStats = currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin');
+    let html = '';
+    contributors.forEach((c, index) => {
+      const isTop3 = index < 3;
+      const rankColors = ['#f59e0b', '#94a3b8', '#b45309']; // Gold, Silver, Bronze
+      const rankBadge = isTop3 
+        ? `<div style="width: 28px; height: 28px; border-radius: 50%; background: ${rankColors[index]}15; color: ${rankColors[index]}; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; border: 1.5px solid ${rankColors[index]}40;">
+            ${index + 1}
+           </div>`
+        : `<div style="width: 28px; height: 28px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px;">
+            ${index + 1}
+           </div>`;
+
+      const statsHTML = showStats ? `
+          <div style="display: flex; align-items: center; gap: 16px; flex-shrink: 0;">
+            <div style="text-align: right;">
+              <span style="font-size: 11px; color: var(--text-muted); display: block;">Approved Uploads</span>
+              <span style="font-size: 13px; font-weight: 600; color: var(--text-main);">${c.uploads}</span>
+            </div>
+            
+            <div style="width: 58px; text-align: center; background: var(--primary-accent); padding: 6px 8px; border-radius: var(--radius-sm); border: 1.5px solid rgba(37, 99, 235, 0.15); display: flex; flex-direction: column; align-items: center; gap: 2px;">
+              <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--primary); letter-spacing: 0.5px;">Pts</span>
+              <span style="font-size: 15px; font-weight: 800; color: var(--primary); line-height: 1;">${c.points}</span>
+            </div>
+          </div>
+      ` : '';
+
+      html += `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border-color); background: ${isTop3 ? 'rgba(248, 250, 252, 0.5)' : 'transparent'};">
+          <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+            ${rankBadge}
+            <div style="min-width: 0;">
+              <div style="font-weight: 700; font-size: 14px; color: var(--text-main); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                ${escapeHTML(capitalizeName(c.name))}
+              </div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                Joined ${new Date(c.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}
+              </div>
+            </div>
+          </div>
+          ${statsHTML}
+        </div>
+      `;
+    });
+
+    if (list) list.innerHTML = html;
+    refreshIcons();
+  } catch (err) {
+    if (loading) loading.style.display = 'none';
+    if (errorAlert) {
+      errorAlert.textContent = err.message || 'Failed to load contributors leaderboard';
+      errorAlert.style.display = 'block';
+    }
+  }
+}
+
+// --- FORM AND DOM INTERACTIVE HANDLERS ---
+function initEventHandlers() {
+  const btnHamburger = document.getElementById('btn-hamburger');
+  const mobMenu = document.getElementById('mobile-nav-menu');
+  const mobOverlay = document.getElementById('mobile-nav-overlay');
+  
+  if (btnHamburger && mobMenu && mobOverlay) {
+    btnHamburger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      mobMenu.classList.add('open');
+      mobOverlay.classList.add('open');
+      document.body.style.overflow = 'hidden'; // PREVENT BACKGROUND SCROLL
+    });
+    // Close menu when clicking on the overlay
+    mobOverlay.addEventListener('click', () => {
+      mobMenu.classList.remove('open');
+      mobOverlay.classList.remove('open');
+      document.body.style.overflow = ''; // RESTORE BACKGROUND SCROLL
+    });
+    mobMenu.addEventListener('click', (e) => {
+      const trigger = e.target.closest('.btn-download-app-trigger');
+      if (trigger) {
+        e.preventDefault();
+        mobMenu.classList.remove('open');
+        mobOverlay.classList.remove('open');
+        document.body.style.overflow = '';
+        
+        const modal = document.getElementById('modal-download-app');
+        const errAlert = document.getElementById('download-app-error');
+        if (modal) {
+          if (errAlert) errAlert.style.display = 'none';
+          modal.style.display = 'flex';
+          if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+        }
+        return;
+      }
+      
+      const link = e.target.closest('a');
+      if (link) {
+        const href = link.getAttribute('href');
+        if (href && !href.startsWith('http') && !href.startsWith('mailto:') && !href.startsWith('tel:') && !link.hasAttribute('download') && link.getAttribute('target') !== '_blank') {
+          const isRoute = href.startsWith('/') || href.startsWith('#/');
+          if (isRoute) {
+            e.preventDefault();
+            mobMenu.classList.remove('open');
+            mobOverlay.classList.remove('open');
+            document.body.style.overflow = '';
+            
+            let targetPath = href;
+            if (targetPath.startsWith('#/')) {
+              targetPath = targetPath.slice(1);
+            }
+            navigate(targetPath);
+            return;
+          }
+        }
+      }
+      
+      e.stopPropagation();
+    });
+  }
+
+  // Admin User Directory Search Events
+  const adminSearchInput = document.getElementById('admin-user-search-input');
+  const adminSearchBtn = document.getElementById('btn-admin-user-search');
+  const adminSearchClearBtn = document.getElementById('btn-admin-user-search-clear');
+
+  if (adminSearchInput && adminSearchBtn && adminSearchClearBtn) {
+    let searchDebounceTimeout = null;
+
+    const executeUserSearch = (resetCount = true) => {
+      adminUserSearchQuery = (adminSearchInput.value || '').trim();
+      if (resetCount) directoryVisibleCount = 5;
+      adminSearchClearBtn.style.display = adminUserSearchQuery ? 'flex' : 'none';
+
+      if (typeof window._refreshAdminUserDirectory === 'function') {
+        window._refreshAdminUserDirectory(false);
+      } else if (typeof renderAdminDashboardView === 'function') {
+        renderAdminDashboardView();
+      }
+    };
+
+    adminSearchInput.addEventListener('input', () => {
+      // Toggle clear button immediately without waiting for debounce
+      adminSearchClearBtn.style.display = adminSearchInput.value.trim() ? 'flex' : 'none';
+      clearTimeout(searchDebounceTimeout);
+      searchDebounceTimeout = setTimeout(() => {
+        executeUserSearch(true);
+      }, 350);
+    });
+
+    adminSearchBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      clearTimeout(searchDebounceTimeout);
+      executeUserSearch(true);
+    });
+
+    adminSearchInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        clearTimeout(searchDebounceTimeout);
+        executeUserSearch(true);
+      }
+    });
+
+    adminSearchClearBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      clearTimeout(searchDebounceTimeout);
+      adminSearchInput.value = '';
+      adminUserSearchQuery = '';
+      directoryVisibleCount = 5;
+      adminSearchClearBtn.style.display = 'none';
+      adminSearchInput.focus();
+
+      if (typeof window._refreshAdminUserDirectory === 'function') {
+        window._refreshAdminUserDirectory(false);
+      } else if (typeof renderAdminDashboardView === 'function') {
+        renderAdminDashboardView();
+      }
+    });
+  }
+
+  // History and Hash Routing
+  window.addEventListener('popstate', router);
+  window.addEventListener('hashchange', router);
+
+  // Global click interceptor for clean pathname routing
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('a');
+    if (link) {
+      const href = link.getAttribute('href');
+      if (href && !href.startsWith('http') && !href.startsWith('mailto:') && !href.startsWith('tel:') && !link.hasAttribute('download') && link.getAttribute('target') !== '_blank') {
+        const isRoute = href.startsWith('/') || href.startsWith('#/');
+        if (isRoute) {
+          e.stopPropagation();
+          e.preventDefault();
+          let targetPath = href;
+          if (targetPath.startsWith('#/')) {
+            targetPath = targetPath.slice(1);
+          }
+          navigate(targetPath);
+        }
+      }
+    }
+  });
+
+  // Footer Year
+  const footerYear = document.getElementById('footer-year');
+  if (footerYear) {
+    footerYear.textContent = new Date().getFullYear();
+  }
+
+  // Download App Modal Listeners for Desktop Navbar
+  document.addEventListener('click', async (e) => {
+    // Dropdown toggle click
+    const btnMore = e.target.closest('.btn-more-options');
+    if (btnMore) {
+      e.stopPropagation();
+      const docId = btnMore.getAttribute('data-id');
+      const dropdown = document.getElementById(`dropdown-${docId}`);
+      if (dropdown) {
+        const isVisible = dropdown.style.display === 'block';
+        // Close all other dropdowns
+        document.querySelectorAll('.more-options-dropdown').forEach(el => el.style.display = 'none');
+        // Toggle this one
+        dropdown.style.display = isVisible ? 'none' : 'block';
+      }
+      return;
+    }
+
+    // Close dropdowns if clicked outside
+    if (!e.target.closest('.more-options-container')) {
+      document.querySelectorAll('.more-options-dropdown').forEach(el => el.style.display = 'none');
+    }
+
+    // Pin document click
+    const btnPin = e.target.closest('.btn-pin-doc');
+    if (btnPin) {
+      e.stopPropagation();
+      const docId = btnPin.getAttribute('data-id');
+      btnPin.disabled = true;
+      try {
+        const res = await api.togglePinDocument(docId); const icon = btnPin.closest('.doc-card')?.querySelector('i\[data-lucide="pin"\]'); if (icon) { icon.remove(); } else { const h5 = btnPin.closest('.doc-card')?.querySelector('.doc-meta h5'); if(h5) { const newIcon = document.createElement('i'); newIcon.setAttribute('data-lucide', 'pin'); newIcon.style.width = '14px'; newIcon.style.height = '14px'; newIcon.style.fill = 'var(--warning)'; newIcon.style.color = 'var(--warning)'; newIcon.style.flexShrink = '0'; h5.prepend(newIcon); if(window.lucide) window.lucide.createIcons(); } }
+      } catch (err) {
+        alert(err.message || 'Failed to toggle pin');
+        btnPin.disabled = false;
+      }
+      return;
+    }
+
+    // Capture profile logout button click
+    const logoutBtn = e.target.closest('#btn-profile-logout');
+    if (logoutBtn) {
+      api.logout();
+      currentUser = null;
+
+      updateNavbar();
+      navigate('/');
+      return;
+    }
+
+    // Intercept terms of service link clicks
+    const termsLink = e.target.closest('a[href="/terms"]');
+    if (termsLink) {
+      e.preventDefault();
+      showTermsModal();
+      return;
+    }
+
+    // Intercept privacy policy link clicks
+    const privacyLink = e.target.closest('a[href="/privacy"]');
+    if (privacyLink) {
+      e.preventDefault();
+      showPrivacyModal();
+      return;
+    }
+
+    // Only capture triggers for downloading the app
+    const trigger = e.target.closest('.btn-download-app-trigger');
+    if (trigger) {
+      e.preventDefault();
+      const modal = document.getElementById('modal-download-app');
+      const errAlert = document.getElementById('download-app-error');
+      if (modal) {
+        if (errAlert) errAlert.style.display = 'none';
+        modal.style.display = 'flex';
+        if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+      }
+      return;
+    }
+
+    // Capture shift/move document button clicks (for admins)
+    const moveTrigger = e.target.closest('.btn-move-doc');
+    if (moveTrigger) {
+      e.preventDefault();
+      const id = moveTrigger.getAttribute('data-id');
+      const title = moveTrigger.getAttribute('data-title');
+      openMoveDocumentModal(id, title);
+    }
+  });
+
+  const btnDownloadDesktop = document.getElementById('btn-download-desktop');
+  const downloadAppErrorAlert = document.getElementById('download-app-error');
+  if (btnDownloadDesktop) {
+    btnDownloadDesktop.addEventListener('click', async () => {
+      if (window.deferredInstallPrompt) {
+        window.deferredInstallPrompt.prompt();
+        const choiceResult = await window.deferredInstallPrompt.userChoice;
+        if (choiceResult && choiceResult.outcome === 'accepted') {
+          console.log('[PWA] User accepted desktop install');
+        }
+        window.deferredInstallPrompt = null;
+        const modal = document.getElementById('modal-download-app');
+        if (modal) modal.style.display = 'none';
+      } else if (window.matchMedia('(display-mode: standalone)').matches) {
+        if (downloadAppErrorAlert) {
+          downloadAppErrorAlert.textContent = 'StudyMyte is already installed on this device!';
+          downloadAppErrorAlert.style.display = 'block';
+        }
+      } else {
+        if (downloadAppErrorAlert) {
+          downloadAppErrorAlert.innerHTML = '<strong>To install:</strong> Look for the <strong>🖥️ Install App</strong> icon in your browser address bar (top right) or open your browser menu (⋮) and select <strong>"Install StudyMyte"</strong>.';
+          downloadAppErrorAlert.style.display = 'block';
+        }
+      }
+    });
+  }
+
+  const btnDownloadAndroid = document.getElementById('btn-download-android');
+  if (btnDownloadAndroid) {
+    btnDownloadAndroid.addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.href = '/studymyte.apk';
+      link.download = 'studymyte.apk';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      const modal = document.getElementById('modal-download-app');
+      if (modal) modal.style.display = 'none';
+    });
+  }
+
+  const btnDownloadIos = document.getElementById('btn-download-ios');
+  const downloadErrAlert = document.getElementById('download-app-error');
+  if (btnDownloadIos && downloadErrAlert) {
+    btnDownloadIos.addEventListener('click', () => {
+      downloadErrAlert.innerHTML = '<strong>📱 iOS App Status:</strong> StudyMyte for iOS is currently under active development. You can add StudyMyte to your iPhone Home Screen via Safari (tap <strong>Share ➔ Add to Home Screen</strong>)!';
+      downloadErrAlert.style.display = 'block';
+    });
+  }
+
+
+  const btnCancelDownload = document.getElementById('modal-download-app-cancel');
+  if (btnCancelDownload) {
+    btnCancelDownload.addEventListener('click', () => {
+      const modal = document.getElementById('modal-download-app');
+      if (modal) modal.style.display = 'none';
+    });
+  }
+
+  // Populate dynamic upload academic years
+  const uploadYearSel = document.getElementById('upload-doc-year');
+  const years = getAcademicYears();
+  if (uploadYearSel) {
+    uploadYearSel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+  }
+
+  // 1. ANNOUNCEMENT POST FORM
+  const addAnnBtn = document.getElementById('btn-add-announcement');
+  const annForm = document.getElementById('form-announcement');
+  const addAnnText = document.getElementById('text-add-announcement');
+
+  addAnnBtn.addEventListener('click', () => {
+    if (annForm.style.display === 'none') {
+      annForm.style.display = 'block';
+      addAnnText.textContent = 'Cancel';
+    } else {
+      annForm.style.display = 'none';
+      addAnnText.textContent = 'Add Announcement';
+    }
+  });
+
+  annForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = document.getElementById('ann-title').value.trim();
+    const content = document.getElementById('ann-content').value.trim();
+    const docUrl = document.getElementById('ann-link').value.trim();
+    if (!title || !content) return;
+
+    const submitBtn = annForm.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Posting...';
+
+    try {
+      await api.createAnnouncement(title, content, docUrl || null);
+      document.getElementById('ann-title').value = '';
+      document.getElementById('ann-content').value = '';
+      document.getElementById('ann-link').value = '';
+      annForm.style.display = 'none';
+      addAnnText.textContent = 'Add Announcement';
+      await renderHomeView();
+    } catch (err) {
+      alert(err.message || 'Failed to post announcement');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
+  });
+
+  // 2. LOGIN FORM
+  const loginForm = document.getElementById('form-login');
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const phone = document.getElementById('login-phone').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errorAlert = document.getElementById('login-error-alert');
+    const btnContent = document.getElementById('login-btn-content');
+
+    errorAlert.style.display = 'none';
+    btnContent.innerHTML = 'Logging in...';
+
+    try {
+      const res = await api.login(phone, password);
+      currentUser = res.user;
+      updateNavbar();
+      startNotificationPolling();
+      navigate('/');
+      checkCompulsoryEmail();
+      if (res.isNewUser) {
+        // Automatically download user manual for new users
+        downloadUserManual();
+      }
+    } catch (err) {
+      errorAlert.textContent = err.message || 'Failed to login';
+      errorAlert.style.display = 'block';
+      if (err.message && err.message.includes('pending')) {
+        errorAlert.className = 'alert alert-warning';
+      } else {
+        errorAlert.className = 'alert alert-danger';
+      }
+      btnContent.innerHTML = '<i data-lucide="log-in" style="width:18px;height:18px;"></i> Login';
+      refreshIcons();
+    }
+  });
+
+  // Password Visibility Toggles
+  const btnShowLoginPass = document.getElementById('btn-show-login-password');
+  if (btnShowLoginPass) {
+    btnShowLoginPass.addEventListener('click', () => {
+      const input = document.getElementById('login-password');
+      const icon = btnShowLoginPass.querySelector('i');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        input.type = 'password';
+        icon.setAttribute('data-lucide', 'eye');
+      }
+      refreshIcons();
+    });
+  }
+
+  const btnShowSignupPass = document.getElementById('btn-show-signup-password');
+  if (btnShowSignupPass) {
+    btnShowSignupPass.addEventListener('click', () => {
+      const input = document.getElementById('signup-password');
+      const icon = btnShowSignupPass.querySelector('i');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        input.type = 'password';
+        icon.setAttribute('data-lucide', 'eye');
+      }
+      refreshIcons();
+    });
+  }
+
+  // Reset Password Visibility Toggles
+  const btnShowResetOld = document.getElementById('btn-show-reset-old-password');
+  if (btnShowResetOld) {
+    btnShowResetOld.addEventListener('click', () => {
+      const input = document.getElementById('reset-old-password');
+      const icon = btnShowResetOld.querySelector('i');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        input.type = 'password';
+        icon.setAttribute('data-lucide', 'eye');
+      }
+      refreshIcons();
+    });
+  }
+
+  const btnShowResetNew = document.getElementById('btn-show-reset-new-password');
+  if (btnShowResetNew) {
+    btnShowResetNew.addEventListener('click', () => {
+      const input = document.getElementById('reset-new-password');
+      const icon = btnShowResetNew.querySelector('i');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        input.type = 'password';
+        icon.setAttribute('data-lucide', 'eye');
+      }
+      refreshIcons();
+    });
+  }
+
+  const btnShowResetConfirm = document.getElementById('btn-show-reset-confirm-password');
+  if (btnShowResetConfirm) {
+    btnShowResetConfirm.addEventListener('click', () => {
+      const input = document.getElementById('reset-confirm-password');
+      const icon = btnShowResetConfirm.querySelector('i');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        input.type = 'password';
+        icon.setAttribute('data-lucide', 'eye');
+      }
+      refreshIcons();
+    });
+  }
+
+  // Reset Password Form Submit
+  const resetPasswordForm = document.getElementById('form-reset-password');
+  if (resetPasswordForm) {
+    resetPasswordForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const oldPassword = document.getElementById('reset-old-password').value;
+      const newPassword = document.getElementById('reset-new-password').value;
+      const confirmPassword = document.getElementById('reset-confirm-password').value;
+
+      const errorAlert = document.getElementById('reset-password-error-alert');
+      const successAlert = document.getElementById('reset-password-success-alert');
+      const btnContent = document.getElementById('reset-password-btn-content');
+
+      errorAlert.style.display = 'none';
+      successAlert.style.display = 'none';
+      btnContent.innerHTML = 'Changing Password...';
+
+      if (newPassword.length < 6) {
+        errorAlert.textContent = 'New password must be at least 6 characters';
+        errorAlert.style.display = 'block';
+        btnContent.innerHTML = '<i data-lucide="save" style="width: 18px; height: 18px;"></i> Change Password';
+        refreshIcons();
+        return;
+      }
+
+      if (newPassword !== confirmPassword) {
+        errorAlert.textContent = 'New passwords do not match';
+        errorAlert.style.display = 'block';
+        btnContent.innerHTML = '<i data-lucide="save" style="width: 18px; height: 18px;"></i> Change Password';
+        refreshIcons();
+        return;
+      }
+
+      try {
+        const res = await api.resetPassword(oldPassword, newPassword, confirmPassword);
+        successAlert.textContent = res.message || 'Password successfully changed!';
+        successAlert.style.display = 'block';
+        
+        // Clear input fields
+        document.getElementById('reset-old-password').value = '';
+        document.getElementById('reset-new-password').value = '';
+        document.getElementById('reset-confirm-password').value = '';
+      } catch (err) {
+        errorAlert.textContent = err.message || 'Failed to reset password';
+        errorAlert.style.display = 'block';
+      } finally {
+        btnContent.innerHTML = '<i data-lucide="save" style="width: 18px; height: 18px;"></i> Change Password';
+        refreshIcons();
+      }
+    });
+  }
+
+  // Forgot password button on reset-password page
+  const btnResetForgot = document.getElementById('btn-reset-page-forgot');
+  if (btnResetForgot) {
+    btnResetForgot.addEventListener('click', () => {
+      navigate('/forgot-password');
+    });
+  }
+
+  // 3. SIGNUP FORM
+  const signupForm = document.getElementById('form-signup');
+  const roleSelect = document.getElementById('signup-role');
+  const roleHint = document.getElementById('signup-role-hint');
+
+  // Dropdown role hint changer
+  if (roleSelect && roleHint) {
+    roleSelect.addEventListener('change', (e) => {
+      if (e.target.value === 'student') {
+        roleHint.textContent = '✓ Instant approval. Get immediate access.';
+      } else {
+        roleHint.textContent = '⚠ Requires Admin manual approval before logging in.';
+      }
+    });
+  }
+
+  signupForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('signup-name').value.trim();
+    const phone = document.getElementById('signup-phone').value.trim();
+    const email = document.getElementById('signup-email') ? document.getElementById('signup-email').value.trim() : '';
+    const password = document.getElementById('signup-password').value;
+    const role = roleSelect ? roleSelect.value : 'student';
+
+    const errorAlert = document.getElementById('signup-error-alert');
+    const successAlert = document.getElementById('signup-success-alert');
+    const successText = document.getElementById('signup-success-text');
+    const btnContent = document.getElementById('signup-btn-content');
+
+    errorAlert.style.display = 'none';
+    successAlert.style.display = 'none';
+    btnContent.innerHTML = 'Creating Account...';
+
+    if (phone.length < 10) {
+      errorAlert.textContent = 'Phone number must be at least 10 digits';
+      errorAlert.style.display = 'block';
+      btnContent.innerHTML = '<i data-lucide="user-plus" style="width:18px;height:18px;"></i> Register';
+      refreshIcons();
+      return;
+    }
+
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!email || !emailRegex.test(email)) {
+      errorAlert.textContent = 'Please enter a valid email address (e.g. example@gmail.com)';
+      errorAlert.style.display = 'block';
+      btnContent.innerHTML = '<i data-lucide="user-plus" style="width:18px;height:18px;"></i> Register';
+      refreshIcons();
+      return;
+    }
+
+    try {
+      const res = await api.signup(name, phone, email, password, role);
+      if (res.requiresApproval) {
+        successText.textContent = res.message;
+        successAlert.style.display = 'flex';
+        signupForm.style.display = 'none';
+      } else {
+        currentUser = res.user;
+        updateNavbar();
+        startNotificationPolling();
+        navigate('/');
+        // Automatically download user manual for new users
+        downloadUserManual();
+      }
+    } catch (err) {
+      errorAlert.textContent = err.message || 'Failed to sign up';
+      errorAlert.style.display = 'block';
+    } finally {
+      btnContent.innerHTML = '<i data-lucide="user-plus" style="width:18px;height:18px;"></i> Register';
+      refreshIcons();
+    }
+  });
+
+  // 4. FOLDER OPERATION MODAL FORM
+  const folderForm = document.getElementById('form-folder');
+  
+  // Close / Cancel modal listeners
+  document.getElementById('modal-folder-close').addEventListener('click', closeAllModals);
+  document.getElementById('modal-folder-cancel').addEventListener('click', closeAllModals);
+
+  folderForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const folderId = document.getElementById('modal-folder-id').value;
+    const name = document.getElementById('modal-folder-name').value.trim();
+    const sectionType = document.getElementById('modal-folder-section-type').value;
+    const parentIdInput = document.getElementById('modal-folder-parent-id');
+    const parentId = parentIdInput ? (parentIdInput.value || null) : null;
+
+    if (!name) return;
+
+    const submitBtn = folderForm.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving...';
+
+    try {
+      if (folderId) {
+        // Rename folder
+        await api.renameFolder(folderId, name);
+      } else {
+        // Create new folder (with optional parentId for nesting)
+        await api.createFolder(name, sectionType, parentId);
+      }
+      closeAllModals();
+
+      // Reload active view state
+      if (sectionType === 'notes') {
+        await renderNotesView();
+      } else if (sectionType === 'papers') {
+        await renderPapersView();
+      } else {
+        await renderResourcesView();
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to save folder');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
+  });
+
+
+  // 5. DOCUMENT UPLOAD MODAL FORM
+  const uploadForm = document.getElementById('form-upload');
+  const dragBox = document.getElementById('upload-drag-box');
+  const fileInput = document.getElementById('upload-file-input');
+  const fileLabel = document.getElementById('upload-file-label');
+
+  document.getElementById('modal-upload-close').addEventListener('click', closeAllModals);
+  document.getElementById('modal-upload-cancel').addEventListener('click', closeAllModals);
+
+  // File trigger click
+  dragBox.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      fileLabel.textContent = file.name;
+    } else {
+      fileLabel.textContent = 'Click to browse files';
+    }
+  });
+
+  // Source Mode tab switcher events
+  const tabUploadFile = document.getElementById('tab-upload-file');
+  const tabUploadLink = document.getElementById('tab-upload-link');
+  const tabUploadScan = document.getElementById('tab-upload-scan');
+  const groupUploadFile = document.getElementById('group-upload-file');
+  const groupUploadLink = document.getElementById('group-upload-link');
+  const groupUploadScan = document.getElementById('group-upload-scan');
+  const uploadLinkInput = document.getElementById('upload-link-input');
+  const uploadErrorAlert = document.getElementById('upload-error-alert');
+
+  if (tabUploadFile && tabUploadLink && tabUploadScan) {
+    tabUploadFile.addEventListener('click', () => {
+      uploadSourceMode = 'file';
+      tabUploadFile.classList.add('active');
+      tabUploadLink.classList.remove('active');
+      tabUploadScan.classList.remove('active');
+      if (groupUploadFile) groupUploadFile.style.display = 'block';
+      if (groupUploadLink) groupUploadLink.style.display = 'none';
+      if (groupUploadScan) groupUploadScan.style.display = 'none';
+      if (uploadErrorAlert) uploadErrorAlert.style.display = 'none';
+      
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+      }
+      const streamWrapper = document.getElementById('scan-camera-stream-wrapper');
+      const galleryWrapper = document.getElementById('scan-gallery-and-actions');
+      if (streamWrapper) streamWrapper.style.display = 'none';
+      if (galleryWrapper) galleryWrapper.style.display = 'block';
+    });
+
+    tabUploadLink.addEventListener('click', () => {
+      uploadSourceMode = 'link';
+      tabUploadFile.classList.remove('active');
+      tabUploadLink.classList.add('active');
+      tabUploadScan.classList.remove('active');
+      if (groupUploadFile) groupUploadFile.style.display = 'none';
+      if (groupUploadLink) groupUploadLink.style.display = 'block';
+      if (groupUploadScan) groupUploadScan.style.display = 'none';
+      if (uploadErrorAlert) uploadErrorAlert.style.display = 'none';
+      
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+      }
+      const streamWrapper = document.getElementById('scan-camera-stream-wrapper');
+      const galleryWrapper = document.getElementById('scan-gallery-and-actions');
+      if (streamWrapper) streamWrapper.style.display = 'none';
+      if (galleryWrapper) galleryWrapper.style.display = 'block';
+    });
+
+    tabUploadScan.addEventListener('click', () => {
+      uploadSourceMode = 'scan';
+      tabUploadFile.classList.remove('active');
+      tabUploadLink.classList.remove('active');
+      tabUploadScan.classList.add('active');
+      if (groupUploadFile) groupUploadFile.style.display = 'none';
+      if (groupUploadLink) groupUploadLink.style.display = 'none';
+      if (groupUploadScan) groupUploadScan.style.display = 'block';
+      if (uploadErrorAlert) uploadErrorAlert.style.display = 'none';
+    });
+  }
+
+  // Scan file input & button events
+  const btnScanCamera = document.getElementById('btn-scan-camera');
+  const btnScanGallery = document.getElementById('btn-scan-gallery');
+  const btnScanClear = document.getElementById('btn-scan-clear');
+  const btnScanCapture = document.getElementById('btn-scan-capture');
+  const btnScanStop = document.getElementById('btn-scan-stop');
+  const scanVideo = document.getElementById('scan-video');
+  const streamWrapper = document.getElementById('scan-camera-stream-wrapper');
+  const galleryWrapper = document.getElementById('scan-gallery-and-actions');
+  const scanGalleryInput = document.getElementById('scan-gallery-input');
+
+  const handleScanFiles = async (files, triggerButton) => {
+    if (!files.length) return;
+    
+    const originalText = triggerButton.innerHTML;
+    triggerButton.disabled = true;
+    triggerButton.innerHTML = 'Compressing...';
+    
+    try {
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        const compressed = await compressImage(file);
+        scanImages.push(compressed);
+      }
+      renderScanPreviewGallery();
+    } catch (err) {
+      console.error(err);
+      alert('Error processing one or more photos.');
+    } finally {
+      triggerButton.disabled = false;
+      triggerButton.innerHTML = originalText;
+    }
+  };
+
+  if (btnScanCamera && streamWrapper && galleryWrapper) {
+    btnScanCamera.addEventListener('click', async () => {
+      // Insecure Context Fallback or getUserMedia not supported (e.g. HTTP non-localhost IP browsing)
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.warn('getUserMedia is not supported or context is insecure. Falling back to native capture dialog.');
+        const fallbackInput = document.createElement('input');
+        fallbackInput.type = 'file';
+        fallbackInput.accept = 'image/*';
+        fallbackInput.capture = 'environment';
+        fallbackInput.addEventListener('change', async (e) => {
+          await handleScanFiles(Array.from(e.target.files), btnScanCamera);
+        });
+        fallbackInput.click();
+        return;
+      }
+
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } }
+        });
+        if (scanVideo) {
+          scanVideo.srcObject = cameraStream;
+          scanVideo.play();
+        }
+        streamWrapper.style.display = 'block';
+        galleryWrapper.style.display = 'none';
+      } catch (err) {
+        console.error('Camera access error:', err);
+        // Automatic fallback on permissions failure or hardware lock
+        const fallbackInput = document.createElement('input');
+        fallbackInput.type = 'file';
+        fallbackInput.accept = 'image/*';
+        fallbackInput.capture = 'environment';
+        fallbackInput.addEventListener('change', async (e) => {
+          await handleScanFiles(Array.from(e.target.files), btnScanCamera);
+        });
+        fallbackInput.click();
+      }
+    });
+  }
+
+  if (btnScanStop && streamWrapper && galleryWrapper) {
+    btnScanStop.addEventListener('click', () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+      }
+      streamWrapper.style.display = 'none';
+      galleryWrapper.style.display = 'block';
+    });
+  }
+
+  if (btnScanCapture && scanVideo) {
+    btnScanCapture.addEventListener('click', () => {
+      if (!cameraStream) return;
+      
+      const canvas = document.createElement('canvas');
+      const width = scanVideo.videoWidth || 1280;
+      const height = scanVideo.videoHeight || 960;
+      
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(scanVideo, 0, 0, width, height);
+      
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      scanImages.push({
+        dataUrl,
+        width,
+        height
+      });
+      
+      // Snap flash visual effect
+      scanVideo.style.opacity = '0.3';
+      setTimeout(() => {
+        scanVideo.style.opacity = '1';
+      }, 100);
+      
+      renderScanPreviewGallery();
+    });
+  }
+
+  if (btnScanGallery && scanGalleryInput) {
+    btnScanGallery.addEventListener('click', () => scanGalleryInput.click());
+  }
+
+  if (scanGalleryInput) {
+    scanGalleryInput.addEventListener('change', async (e) => {
+      await handleScanFiles(Array.from(e.target.files), btnScanGallery);
+      scanGalleryInput.value = '';
+    });
+  }
+
+  if (btnScanClear) {
+    btnScanClear.addEventListener('click', () => {
+      scanImages = [];
+      renderScanPreviewGallery();
+    });
+  }
+
+  uploadForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorAlert = document.getElementById('upload-error-alert');
+    const docType = document.getElementById('upload-section-type').value;
+    const folderId = document.getElementById('upload-folder-id').value;
+    const title = document.getElementById('upload-doc-title').value.trim();
+    const year = document.getElementById('upload-doc-year').value;
+    const uploadBtnSubmit = document.getElementById('btn-upload-submit');
+
+    errorAlert.style.display = 'none';
+
+    if (!title) {
+      errorAlert.textContent = 'Please enter a document title';
+      errorAlert.style.display = 'block';
+      return;
+    }
+
+    // Determine subject tag
+    let subject = document.getElementById('upload-folder-name').value;
+    if (docType === 'syllabus') {
+      subject = document.getElementById('upload-syllabus-subject-select').value;
+    }
+
+    uploadBtnSubmit.disabled = true;
+    uploadBtnSubmit.textContent = 'Processing...';
+
+    try {
+      if (uploadSourceMode === 'file') {
+        const file = fileInput.files[0];
+        if (!file) {
+          errorAlert.textContent = 'Please select a PDF file to upload';
+          errorAlert.style.display = 'block';
+          uploadBtnSubmit.disabled = false;
+          uploadBtnSubmit.textContent = 'Upload';
+          return;
+        }
+
+        if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+          errorAlert.textContent = 'Only PDF documents are allowed';
+          errorAlert.style.display = 'block';
+          uploadBtnSubmit.disabled = false;
+          uploadBtnSubmit.textContent = 'Upload';
+          return;
+        }
+
+        // Check file size (10 MB = 10485760 bytes)
+        const MAX_FILE_SIZE = 10485760;
+        if (file.size > MAX_FILE_SIZE) {
+          errorAlert.textContent = `File size too large. Got ${file.size}. Maximum is ${MAX_FILE_SIZE}.`;
+          errorAlert.style.display = 'block';
+          uploadBtnSubmit.disabled = false;
+          uploadBtnSubmit.textContent = 'Upload';
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('pdf', file);
+        formData.append('title', title);
+        formData.append('type', docType);
+        formData.append('folderId', folderId || '');
+        formData.append('subject', subject || '');
+        formData.append('year', year || '');
+
+        await request('/documents/upload', {
+          method: 'POST',
+          body: formData
+        });
+      } else if (uploadSourceMode === 'scan') {
+        if (scanImages.length === 0) {
+          errorAlert.textContent = 'Please add/capture at least one photo';
+          errorAlert.style.display = 'block';
+          uploadBtnSubmit.disabled = false;
+          uploadBtnSubmit.textContent = 'Upload';
+          return;
+        }
+
+        uploadBtnSubmit.textContent = 'Compiling PDF...';
+
+        await ensureJsPDFLoaded();
+        const { jsPDF } = window.jspdf;
+
+        const first = scanImages[0];
+        const doc = new jsPDF({
+          orientation: first.width > first.height ? 'landscape' : 'portrait',
+          unit: 'px',
+          format: [first.width, first.height]
+        });
+        doc.addImage(first.dataUrl, 'JPEG', 0, 0, first.width, first.height);
+
+        for (let i = 1; i < scanImages.length; i++) {
+          const img = scanImages[i];
+          doc.addPage([img.width, img.height], img.width > img.height ? 'landscape' : 'portrait');
+          doc.addImage(img.dataUrl, 'JPEG', 0, 0, img.width, img.height);
+        }
+
+        const pdfBlob = doc.output('blob');
+
+        const MAX_FILE_SIZE = 10485760;
+        if (pdfBlob.size > MAX_FILE_SIZE) {
+          errorAlert.textContent = `Generated PDF is too large (${(pdfBlob.size / 1024 / 1024).toFixed(2)} MB). Maximum allowed is 10 MB. Please clear and scan fewer/smaller images.`;
+          errorAlert.style.display = 'block';
+          uploadBtnSubmit.disabled = false;
+          uploadBtnSubmit.textContent = 'Upload';
+          return;
+        }
+
+        uploadBtnSubmit.textContent = 'Uploading PDF...';
+
+        const formData = new FormData();
+        formData.append('pdf', pdfBlob, title.toLowerCase().replace(/[^a-z0-9]/g, '_') + '.pdf');
+        formData.append('title', title);
+        formData.append('type', docType);
+        formData.append('folderId', folderId || '');
+        formData.append('subject', subject || '');
+        formData.append('year', year || '');
+
+        await request('/documents/upload', {
+          method: 'POST',
+          body: formData
+        });
+      } else {
+        const fileUrl = uploadLinkInput.value.trim();
+        if (!fileUrl) {
+          errorAlert.textContent = 'Please enter a valid document URL';
+          errorAlert.style.display = 'block';
+          uploadBtnSubmit.disabled = false;
+          uploadBtnSubmit.textContent = 'Upload';
+          return;
+        }
+
+        if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
+          errorAlert.textContent = 'URL must start with http:// or https://';
+          errorAlert.style.display = 'block';
+          uploadBtnSubmit.disabled = false;
+          uploadBtnSubmit.textContent = 'Upload';
+          return;
+        }
+
+        await request('/documents/upload', {
+          method: 'POST',
+          body: {
+            title,
+            type: docType,
+            folderId: folderId && folderId !== 'null' ? folderId : null,
+            subject: subject || null,
+            year: year || null,
+            fileUrl,
+            fileName: title.toLowerCase().replace(/[^a-z0-9]/g, '_') + '.pdf'
+          }
+        });
+      }
+
+      closeAllModals();
+      
+      // Reload corresponding view
+      if (docType === 'notes') {
+        await renderNotesView();
+      } else if (docType === 'paper') {
+        await renderPapersView();
+      } else {
+        await renderResourcesView();
+      }
+    } catch (err) {
+      errorAlert.textContent = err.message || 'Failed to process document';
+      errorAlert.style.display = 'block';
+    } finally {
+      uploadBtnSubmit.disabled = false;
+      uploadBtnSubmit.textContent = 'Upload';
+    }
+  });
+
+  // 6. EDIT DOCUMENT MODAL FORM
+  const editDocForm = document.getElementById('form-edit-document');
+  const editDocYearSel = document.getElementById('edit-doc-year');
+  if (editDocYearSel) {
+    editDocYearSel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+  }
+
+  const closeEditDocModal = () => {
+    document.getElementById('modal-edit-document').style.display = 'none';
+  };
+
+  const btnCloseEditDoc = document.getElementById('modal-edit-document-close');
+  if (btnCloseEditDoc) {
+    btnCloseEditDoc.addEventListener('click', closeEditDocModal);
+  }
+  const btnCancelEditDoc = document.getElementById('modal-edit-document-cancel');
+  if (btnCancelEditDoc) {
+    btnCancelEditDoc.addEventListener('click', closeEditDocModal);
+  }
+
+  if (editDocForm) {
+    editDocForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorAlert = document.getElementById('edit-doc-error-alert');
+      const docId = document.getElementById('edit-doc-id').value;
+      const title = document.getElementById('edit-doc-title').value.trim();
+      const subject = document.getElementById('edit-doc-subject').value.trim();
+      const year = editDocYearSel.value;
+      const saveBtnSubmit = document.getElementById('btn-edit-document-submit');
+
+      errorAlert.style.display = 'none';
+
+      if (!title) {
+        errorAlert.textContent = 'Document title is required';
+        errorAlert.style.display = 'block';
+        return;
+      }
+
+      saveBtnSubmit.disabled = true;
+      saveBtnSubmit.textContent = 'Saving changes...';
+
+      try {
+        await api.updateDocument(docId, title, subject, year);
+        closeEditDocModal();
+        
+        // --- Optimistic UI Update ---
+        // Find the like button or edit button that holds the docId, then find its parent .doc-card
+        const docCards = document.querySelectorAll('.doc-card');
+        docCards.forEach(card => {
+          const btn = card.querySelector(`[data-id="${docId}"]`) || card.querySelector(`[data-doc-id="${docId}"]`);
+          if (btn) {
+            // Found the card, now update its text nodes
+            const h5 = card.querySelector('.doc-meta h5');
+            if (h5) {
+              // Be careful to preserve inner HTML like pinned icons
+              const pinnedIcon = h5.querySelector('i[data-lucide="pin"]');
+              const userTag = h5.querySelector('.user-tag'); // exists in some views
+              h5.innerHTML = '';
+              if (pinnedIcon) h5.appendChild(pinnedIcon);
+              h5.appendChild(document.createTextNode(' ' + title + ' '));
+              if (userTag) h5.appendChild(userTag);
+            }
+            const details = card.querySelector('.doc-meta-details');
+            if (details) {
+              // Update text nodes that match "Subject: " or "Year: "
+              details.childNodes.forEach(node => {
+                if (node.nodeType === Node.TEXT_NODE || node.tagName === 'SPAN') {
+                  const text = node.textContent;
+                  if (text.includes('Subject:')) {
+                    node.textContent = `Subject: ${subject || 'General'}`;
+                  } else if (text.includes('Year:')) {
+                    node.textContent = `Year: ${year || 'N/A'}`;
+                  }
+                }
+              });
+            }
+          }
+        });
+        
+        // We do NOT call renderMyUploadsView() etc. to prevent the UI from flickering/reloading!
+      } catch (err) {
+        errorAlert.textContent = err.message || 'Failed to save changes';
+        errorAlert.style.display = 'block';
+      } finally {
+        saveBtnSubmit.disabled = false;
+        saveBtnSubmit.textContent = 'Save Changes';
+      }
+    });
+  }
+
+    
+    // ===== UNIFIED SHIFT TREE SYSTEM =====
+    const SHIFT_SECTIONS = [
+      { key: 'notes', label: 'Notes', icon: 'notebook-pen', apiType: 'notes' },
+      { key: 'papers', label: 'Papers', icon: 'file-text', apiType: 'paper' },
+      { key: 'lab_manuals', label: 'Lab Manuals', icon: 'flask-conical', apiType: 'lab_manual' },
+      { key: 'books', label: 'Books', icon: 'book-open', apiType: 'book' },
+      { key: 'simulations', label: 'Simulations / Roadmaps', icon: 'route', apiType: 'simulation' },
+      { key: 'competitive', label: 'Competitive Exam PYQs', icon: 'trophy', apiType: 'competitive' },
+      { key: 'syllabus', label: 'Syllabus', icon: 'list-checks', apiType: 'syllabus', noFolders: true }
+    ];
+
+    let _shiftSelectedSection = null;
+    let _shiftSelectedFolderId = null;
+    let _shiftAllFoldersCache = {};
+
+    function closeShiftModal() {
+      document.getElementById('modal-shift-item').style.display = 'none';
+      _shiftSelectedSection = null;
+      _shiftSelectedFolderId = null;
+      _shiftAllFoldersCache = {};
+    }
+
+
+    function buildCascadingSelectsForMove(folders, wrapperId, currentFolderId, allowSelectNull = true) {
+      const wrapper = document.getElementById(wrapperId);
+      wrapper.innerHTML = '';
+      
+      const childrenMap = new Map();
+      folders.forEach(f => {
+        const pid = f.parentId ? String(f.parentId) : 'root';
+        if (!childrenMap.has(pid)) childrenMap.set(pid, []);
+        childrenMap.get(pid).push(f);
+      });
+      
+      function renderSelectForParent(parentId, depth) {
+        const existingSelects = Array.from(wrapper.querySelectorAll('.move-cascading-select'));
+        existingSelects.forEach(sel => {
+          if (parseInt(sel.getAttribute('data-depth')) >= depth) sel.remove();
+        });
+        
+        let children = childrenMap.get(parentId) || [];
+        if (currentFolderId) {
+          children = children.filter(c => String(c.id) !== String(currentFolderId));
+        }
+        if (children.length === 0) return;
+        
+        children.sort((a, b) => a.name.localeCompare(b.name));
+        
+        const select = document.createElement('select');
+        select.className = 'form-select move-cascading-select';
+        select.setAttribute('data-depth', depth);
+        
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
+        defaultOption.textContent = depth === 0 ? 'Select Top Level Folder...' : 'Select Sub-folder...';
+        select.appendChild(defaultOption);
+        
+        if (depth === 0 && allowSelectNull) {
+            const rootOpt = document.createElement('option');
+            rootOpt.value = 'null';
+            rootOpt.textContent = 'Root (No Parent)';
+            select.appendChild(rootOpt);
+        }
+        
+        children.forEach(child => {
+          const opt = document.createElement('option');
+          opt.value = child.id;
+          opt.textContent = child.name;
+          select.appendChild(opt);
+        });
+        
+        select.addEventListener('change', (e) => {
+          const selectedId = e.target.value;
+          _shiftSelectedFolderId = selectedId;
+          document.getElementById('btn-shift-submit').disabled = false;
+
+          if (selectedId && selectedId !== 'null') {
+             renderSelectForParent(selectedId, depth + 1);
+          } else {
+             renderSelectForParent('root', depth + 1); // remove deeper ones
+          }
+        });
+        
+        wrapper.appendChild(select);
+      }
+      
+      renderSelectForParent('root', 0);
+    }
+    
+    function getSelectedCascadingValue(wrapperId) {
+      const selects = Array.from(document.getElementById(wrapperId).querySelectorAll('.move-cascading-select'));
+      const validSelects = selects.filter(s => s.value && s.value !== '');
+      if (validSelects.length > 0) return validSelects[validSelects.length - 1].value;
+      return null;
+    }
+
+    window.openUnifiedShiftModal = async function(itemType, itemId, itemName, originSection) {
+      _shiftSelectedSection = null;
+      _shiftSelectedFolderId = null;
+
+      const modal = document.getElementById('modal-shift-item');
+      const titleEl = document.getElementById('shift-modal-title');
+      const errorAlert = document.getElementById('shift-error-alert');
+      const submitBtn = document.getElementById('btn-shift-submit');
+      
+      const sectionSelect = document.getElementById('shift-section-select');
+      const cascadingGroup = document.getElementById('shift-cascading-group');
+      const cascadingWrapper = document.getElementById('shift-cascading-wrapper');
+
+      titleEl.textContent = itemType === 'folder' ? `Shift Folder: ${itemName}` : `Shift Document: ${itemName}`;
+      errorAlert.style.display = 'none';
+      submitBtn.disabled = true;
+      
+      sectionSelect.value = '';
+      cascadingGroup.style.display = 'none';
+      cascadingWrapper.innerHTML = '';
+
+      document.getElementById('shift-item-id').value = itemId;
+      document.getElementById('shift-item-type').value = itemType;
+      document.getElementById('shift-item-section').value = originSection;
+
+      modal.style.display = 'flex';
+    };
+
+    const shiftSectionSelect = document.getElementById('shift-section-select');
+    if (shiftSectionSelect) {
+      shiftSectionSelect.addEventListener('change', async (e) => {
+        const section = e.target.value;
+        _shiftSelectedSection = section;
+        const cascadingGroup = document.getElementById('shift-cascading-group');
+        const cascadingWrapper = document.getElementById('shift-cascading-wrapper');
+        const submitBtn = document.getElementById('btn-shift-submit');
+        const itemType = document.getElementById('shift-item-type').value;
+        const itemId = document.getElementById('shift-item-id').value;
+
+        submitBtn.disabled = true;
+        _shiftSelectedFolderId = null;
+
+        if (!section) {
+          cascadingGroup.style.display = 'none';
+          return;
+        }
+
+        if (section === 'syllabus') {
+          cascadingGroup.style.display = 'none';
+          if (itemType === 'document') {
+             submitBtn.disabled = false; // can submit directly to syllabus
+          }
+          return;
+        }
+
+        cascadingGroup.style.display = 'block';
+        cascadingWrapper.innerHTML = '<div>Loading folders...</div>';
+
+        try {
+          let folders = [];
+          if (section === 'simulations') {
+            const [a, b] = await Promise.all([
+              api.getAllFolders('simulations'),
+              api.getAllFolders('roadmaps')
+            ]);
+            folders = [...a];
+            b.forEach(bf => {
+              if (!folders.some(m => String(m.id) === String(bf.id))) folders.push(bf);
+            });
+          } else {
+            folders = await api.getAllFolders(section);
+          }
+          
+          if (folders.length === 0 && itemType === 'folder') {
+             // Let them shift to root if no folders exist
+             cascadingWrapper.innerHTML = '<div style="color:var(--text-muted); font-size:13px; margin-bottom:8px;">No folders exist here yet.</div>';
+             const rootBtn = document.createElement('button');
+             rootBtn.type = 'button';
+             rootBtn.className = 'btn btn-secondary btn-sm';
+             rootBtn.textContent = 'Shift to Root';
+             rootBtn.onclick = () => {
+                _shiftSelectedFolderId = 'null';
+                submitBtn.disabled = false;
+                rootBtn.style.border = '2px solid var(--primary)';
+             };
+             cascadingWrapper.appendChild(rootBtn);
+          } else if (folders.length === 0) {
+            cascadingWrapper.innerHTML = '<div style="color:var(--text-muted)">No folders available in this section.</div>';
+          } else {
+            // If shifting folder, pass it to filter out moving into itself. If doc, pass null.
+            const filterId = itemType === 'folder' ? itemId : null;
+            buildCascadingSelectsForMove(folders, 'shift-cascading-wrapper', filterId, itemType === 'folder');
+          }
+        } catch (err) {
+          cascadingWrapper.innerHTML = '<div style="color:red">Error loading folders</div>';
+        }
+      });
+    }
+
+    // Close and Cancel handlers
+    const btnShiftClose = document.getElementById('modal-shift-close');
+    if (btnShiftClose) btnShiftClose.addEventListener('click', closeShiftModal);
+    const btnShiftCancel = document.getElementById('modal-shift-cancel');
+    if (btnShiftCancel) btnShiftCancel.addEventListener('click', closeShiftModal);
+
+    // Submit handler
+    const btnShiftSubmit = document.getElementById('btn-shift-submit');
+    if (btnShiftSubmit) {
+      btnShiftSubmit.addEventListener('click', async () => {
+        const itemType = document.getElementById('shift-item-type').value;
+        const itemId = document.getElementById('shift-item-id').value;
+        const originSection = document.getElementById('shift-item-section').value;
+        const errorAlert = document.getElementById('shift-error-alert');
+
+        if (!_shiftSelectedSection) {
+          errorAlert.textContent = 'Please select a destination.';
+          errorAlert.style.display = 'block';
+          return;
+        }
+
+        errorAlert.style.display = 'none';
+        btnShiftSubmit.disabled = true;
+        const origHTML = btnShiftSubmit.innerHTML;
+        btnShiftSubmit.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 15px; height: 15px;"></i> <span>Shifting...</span>';
+        refreshIcons();
+
+        try {
+          if (itemType === 'folder') {
+            // Move folder to new parent
+            const parentId = _shiftSelectedFolderId === 'null' ? null : _shiftSelectedFolderId;
+            await api.moveFolder(itemId, parentId);
+          } else {
+            // Move document to new section + folder
+            const sectionConfig = SHIFT_SECTIONS.find(s => s.key === _shiftSelectedSection);
+            const apiType = sectionConfig ? sectionConfig.apiType : _shiftSelectedSection;
+            const folderId = _shiftSelectedFolderId && _shiftSelectedFolderId !== 'null' ? _shiftSelectedFolderId : null;
+            await api.moveDocument(itemId, apiType, folderId);
+          }
+
+          closeShiftModal();
+
+          // Refresh active views
+          const hash = window.location.hash || '#/';
+          if (hash === '#/my-uploads') await renderMyUploadsView();
+          else if (hash === '#/notes') await renderNotesView();
+          else if (hash === '#/papers') await renderPapersView();
+          else if (hash === '#/resources') await renderResourcesView();
+
+        } catch (err) {
+          errorAlert.textContent = err.message || 'Failed to shift item. Please try again.';
+          errorAlert.style.display = 'block';
+        } finally {
+          btnShiftSubmit.disabled = false;
+          btnShiftSubmit.innerHTML = origHTML;
+          refreshIcons();
+        }
+      });
+    }
+
+    // Global listener for folder shift buttons
+    document.addEventListener('click', async (e) => {
+      const moveFolderTrigger = e.target.closest('.btn-move-folder');
+      if (moveFolderTrigger) {
+        e.preventDefault();
+        const id = moveFolderTrigger.getAttribute('data-id');
+        const name = moveFolderTrigger.getAttribute('data-name');
+        
+        // Determine section from closest view container
+        let section = 'notes';
+        if (moveFolderTrigger.closest('#view-papers')) section = 'papers';
+        else if (moveFolderTrigger.closest('#view-resources')) section = 'resources';
+        
+        openUnifiedShiftModal('folder', id, name, section);
+      }
+    });
+
+    // Keep legacy references working — old move modal handlers are now no-ops
+    // since we use the unified shift modal instead
+
+    // Global listener for edit document
+    document.addEventListener('click', async (e) => {
+      const editDocTrigger = e.target.closest('.btn-edit-uploaded-doc');
+      if (editDocTrigger) {
+        e.preventDefault();
+        const id = editDocTrigger.getAttribute('data-id');
+        const title = editDocTrigger.getAttribute('data-title');
+        const subject = editDocTrigger.getAttribute('data-subject');
+        const year = editDocTrigger.getAttribute('data-year');
+        openEditDocumentModal(id, title, subject, year);
+      }
+    });
+
+  // SEND MESSAGE MODAL (Admin Only)
+  const sendMessageForm = document.getElementById('form-send-message');
+  const closeSendMessageModal = () => {
+    document.getElementById('modal-send-message').style.display = 'none';
+  };
+
+  const btnCloseSendMessage = document.getElementById('modal-send-message-close');
+  if (btnCloseSendMessage) {
+    btnCloseSendMessage.addEventListener('click', closeSendMessageModal);
+  }
+  const btnCancelSendMessage = document.getElementById('modal-send-message-cancel');
+  if (btnCancelSendMessage) {
+    btnCancelSendMessage.addEventListener('click', closeSendMessageModal);
+  }
+
+  if (sendMessageForm) {
+    sendMessageForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorAlert = document.getElementById('send-message-error-alert');
+      const userId = document.getElementById('send-message-user-id').value;
+      const message = document.getElementById('send-message-body').value.trim();
+      const submitBtn = document.getElementById('btn-send-message-submit');
+
+      errorAlert.style.display = 'none';
+
+      if (!message) {
+        errorAlert.textContent = 'Message body is required';
+        errorAlert.style.display = 'block';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      const originalText = submitBtn.textContent;
+      submitBtn.textContent = 'Sending...';
+
+      try {
+        await api.sendNotification(userId, message);
+        closeSendMessageModal();
+        alert('Message sent successfully!');
+      } catch (err) {
+        errorAlert.textContent = err.message || 'Failed to send message';
+        errorAlert.style.display = 'block';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+      }
+    });
+  }
+
+  const btnSaveTemplate = document.getElementById('btn-save-as-template');
+  if (btnSaveTemplate) {
+    btnSaveTemplate.addEventListener('click', () => {
+      const textarea = document.getElementById('send-message-body');
+      if (!textarea || !textarea.value.trim()) {
+        alert('Please write some text in the message body first to save as a template.');
+        return;
+      }
+      const name = prompt('Enter a name for this template:');
+      if (name && name.trim()) {
+        saveMessageTemplate(name.trim(), textarea.value.trim());
+      }
+    });
+  }
+
+  // 7. MY UPLOADS SEARCH
+  const myUploadsSearch = document.getElementById('my-uploads-search');
+  if (myUploadsSearch) {
+    myUploadsSearch.addEventListener('input', renderFilteredMyUploads);
+  }
+
+  // 8. HELP & SUPPORT SUBMISSION
+  const supportForm = document.getElementById('form-support');
+  if (supportForm) {
+    supportForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const subject = document.getElementById('support-subject').value.trim();
+      const message = document.getElementById('support-message').value.trim();
+      const errorAlert = document.getElementById('support-error-alert');
+      const successAlert = document.getElementById('support-success-alert');
+      const submitBtn = supportForm.querySelector('button[type="submit"]');
+      const btnContent = document.getElementById('support-btn-content');
+
+      errorAlert.style.display = 'none';
+      successAlert.style.display = 'none';
+
+      const reqEmailGroup = document.getElementById('support-requested-email-group');
+      const isAddEmailRequest = reqEmailGroup && reqEmailGroup.style.display !== 'none';
+      let requestedEmail = null;
+
+      if (isAddEmailRequest) {
+        const reqEmailInput = document.getElementById('support-requested-email');
+        requestedEmail = reqEmailInput ? reqEmailInput.value.trim().toLowerCase() : '';
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!requestedEmail || !emailRegex.test(requestedEmail)) {
+          errorAlert.textContent = 'Please enter a valid email address to link to your account.';
+          errorAlert.style.display = 'block';
+          return;
+        }
+      }
+
+      if (!subject || !message) {
+        errorAlert.textContent = 'Subject and message are required';
+        errorAlert.style.display = 'block';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      const originalHTML = btnContent.innerHTML;
+      btnContent.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 18px; height: 18px;"></i> Submitting...';
+      refreshIcons();
+
+      try {
+        const name = document.getElementById('support-user-name').value.trim();
+        const phone = document.getElementById('support-user-phone').value.trim();
+        const role = document.getElementById('support-user-role').value.trim();
+
+        await api.submitHelpRequest(subject, message, name, phone, role, requestedEmail);
+        
+        if (isAddEmailRequest) {
+          successAlert.innerHTML = `
+            <div style="font-size: 14px; line-height: 1.5;">
+              <strong style="display: block; margin-bottom: 4px;">Application Submitted Successfully!</strong>
+              Your application is submitted. Our admin team will update your email in the system. Please try resetting your password again in 2 days.
+              <div style="margin-top: 12px;">
+                <a href="#/login" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; font-weight: 600;">
+                  <i data-lucide="arrow-left" style="width: 14px; height: 14px;"></i> Back to Login
+                </a>
+              </div>
+            </div>
+          `;
+          const reqEmailInput = document.getElementById('support-requested-email');
+          if (reqEmailInput) reqEmailInput.value = '';
+        } else {
+          successAlert.textContent = 'Your help and support request has been submitted successfully!';
+        }
+        successAlert.style.display = 'block';
+        document.getElementById('support-subject').value = '';
+        document.getElementById('support-message').value = '';
+
+        if (!currentUser) {
+          document.getElementById('support-user-name').value = '';
+          document.getElementById('support-user-phone').value = '';
+          document.getElementById('support-user-role').value = '';
+        }
+        
+        // Scroll support container to top to show success alert
+        const supportCard = document.querySelector('.support-card');
+        if (supportCard) supportCard.scrollTop = 0;
+
+        await loadSupportHistory();
+      } catch (err) {
+        errorAlert.textContent = err.message || 'Failed to submit help request';
+        errorAlert.style.display = 'block';
+      } finally {
+        submitBtn.disabled = false;
+        btnContent.innerHTML = originalHTML;
+        refreshIcons();
+      }
+    });
+  }
+
+  // Show History Modal Trigger
+  const btnShowHistory = document.getElementById('btn-show-support-history');
+  const modalSupportHistory = document.getElementById('modal-support-history');
+  const modalSupportHistoryClose = document.getElementById('modal-support-history-close');
+  const btnSupportHistoryClose = document.getElementById('btn-support-history-close');
+
+  if (btnShowHistory && modalSupportHistory) {
+    btnShowHistory.addEventListener('click', async () => {
+      modalSupportHistory.style.display = 'flex';
+      await loadSupportHistory();
+    });
+
+    const handleClose = () => {
+      modalSupportHistory.style.display = 'none';
+    };
+
+    if (modalSupportHistoryClose) modalSupportHistoryClose.addEventListener('click', handleClose);
+    if (btnSupportHistoryClose) btnSupportHistoryClose.addEventListener('click', handleClose);
+  }
+
+  // Dynamic Gmail Support Pre-Fill Handler
+  const btnGmailSupport = document.getElementById('btn-open-gmail-support');
+  if (btnGmailSupport) {
+    btnGmailSupport.addEventListener('click', (e) => {
+      const subjInput = document.getElementById('support-subject');
+      const msgInput = document.getElementById('support-message');
+      const subj = (subjInput && subjInput.value.trim()) || 'StudyMyte Support Inquiry';
+      let body = (msgInput && msgInput.value.trim()) || '';
+      if (currentUser) {
+        const userInfo = `\n\n---\nSent by: ${currentUser.name || 'User'}\nPhone: ${currentUser.phone || ''}\nRole: ${currentUser.role || ''}`;
+        body = body ? body + userInfo : userInfo.trim();
+      }
+      const targetUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=support@studymyte.tech&su=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+      btnGmailSupport.setAttribute('href', targetUrl);
+    });
+  }
+
+  // Global Copy Support Email Button Handler
+  document.addEventListener('click', (e) => {
+    const copyBtn = e.target.closest('.btn-copy-support-email');
+    if (!copyBtn) return;
+    const emailToCopy = copyBtn.getAttribute('data-email') || 'support@studymyte.tech';
+    const labelSpan = copyBtn.querySelector('.copy-label') || copyBtn;
+    const prevText = labelSpan.textContent;
+
+    const showSuccess = () => {
+      labelSpan.textContent = 'Copied!';
+      copyBtn.style.borderColor = 'var(--success)';
+      copyBtn.style.color = 'var(--success)';
+      setTimeout(() => {
+        labelSpan.textContent = prevText;
+        copyBtn.style.borderColor = '';
+        copyBtn.style.color = '';
+      }, 2000);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(emailToCopy).then(showSuccess).catch(() => {
+        window.prompt('Copy support email address:', emailToCopy);
+      });
+    } else {
+      window.prompt('Copy support email address:', emailToCopy);
+    }
+  });
+}
+
+// Helper to escape HTML characters
+function escapeHTML(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// Helper to capitalize first letter of each word in a name
+function capitalizeName(name) {
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+// --- NOTIFICATION POLLING SYSTEM ---
+let notificationPollInterval = null;
+let isNotificationModalActive = false;
+
+function playNotificationSound() {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = audioCtx.currentTime;
+    
+    // Play double chime: E5 (659Hz) then A5 (880Hz)
+    const osc1 = audioCtx.createOscillator();
+    const gain1 = audioCtx.createGain();
+    osc1.connect(gain1);
+    gain1.connect(audioCtx.destination);
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(659.25, now);
+    gain1.gain.setValueAtTime(0, now);
+    gain1.gain.linearRampToValueAtTime(0.3, now + 0.05);
+    gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+    osc1.start(now);
+    osc1.stop(now + 0.35);
+    
+    const osc2 = audioCtx.createOscillator();
+    const gain2 = audioCtx.createGain();
+    osc2.connect(gain2);
+    gain2.connect(audioCtx.destination);
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(880.00, now + 0.12);
+    gain2.gain.setValueAtTime(0, now + 0.12);
+    gain2.gain.linearRampToValueAtTime(0.3, now + 0.17);
+    gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+    osc2.start(now + 0.12);
+    osc2.stop(now + 0.5);
+  } catch (err) {
+    console.error("Failed to play notification sound:", err);
+  }
+}
+
+async function checkNotifications() {
+  // If not logged in, or already displaying a notification modal, do nothing
+  if (!localStorage.getItem('token') || isNotificationModalActive) return;
+
+  try {
+    const unread = await api.getUnreadNotifications();
+    if (unread && unread.length > 0) {
+      // Pick the first unread notification to show
+      const notif = unread[0];
+      showNotificationModal(notif);
+    }
+  } catch (err) {
+    console.error('Error polling notifications:', err);
+  }
+}
+
+function showNotificationModal(notif) {
+  isNotificationModalActive = true;
+  
+  // Play the chime
+  playNotificationSound();
+  
+  const modal = document.getElementById('modal-view-notification');
+  const contentEl = document.getElementById('notification-message-content');
+  
+  if (modal && contentEl) {
+    contentEl.textContent = notif.message;
+    modal.style.display = 'flex';
+    refreshIcons(); // trigger icon rendering inside modal
+    
+    // Bind dismiss handlers
+    const closeBtn = document.getElementById('modal-view-notification-close');
+    const ackBtn = document.getElementById('btn-notification-acknowledge');
+    
+    const handleClose = async () => {
+      modal.style.display = 'none';
+      isNotificationModalActive = false;
+      try {
+        await api.markNotificationRead(notif.id);
+        // check again for any more queued unread notifications
+        setTimeout(checkNotifications, 1000);
+      } catch (err) {
+        console.error('Error marking notification as read:', err);
+      }
+    };
+    
+    if (closeBtn) closeBtn.onclick = handleClose;
+    if (ackBtn) ackBtn.onclick = handleClose;
+  }
+}
+
+function startNotificationPolling() {
+  if (notificationPollInterval) clearInterval(notificationPollInterval);
+  
+  // Check immediately
+  checkNotifications();
+  
+  // Poll every 8 seconds
+  notificationPollInterval = setInterval(checkNotifications, 8000);
+}
+
+function stopNotificationPolling() {
+  if (notificationPollInterval) {
+    clearInterval(notificationPollInterval);
+    notificationPollInterval = null;
+  }
+}
+
+// --- MESSAGE TEMPLATES SYSTEM ---
+let messageTemplatesList = [];
+
+async function saveMessageTemplate(name, content) {
+  try {
+    await api.saveMessageTemplate(name, content);
+    await renderMessageTemplates();
+  } catch (err) {
+    alert(err.message || 'Failed to save template');
+  }
+}
+
+async function renderMessageTemplates() {
+  const container = document.getElementById('quick-templates-container');
+  if (!container) return;
+  
+  container.innerHTML = '<span style="font-size: 11px; color: var(--text-muted);">Loading templates...</span>';
+
+  try {
+    messageTemplatesList = await api.getMessageTemplates();
+    if (messageTemplatesList.length === 0) {
+      container.innerHTML = '<span style="font-size: 11px; color: var(--text-muted);">No templates saved.</span>';
+      return;
+    }
+
+    container.innerHTML = messageTemplatesList.map((t, idx) => `
+      <button type="button" class="btn btn-secondary btn-sm btn-select-template" data-index="${idx}" style="font-size: 11px; padding: 4px 8px; background-color: #f1f5f9; border-color: #e2e8f0; color: #475569;">
+        ${escapeHTML(t.name)}
+      </button>
+    `).join('');
+    
+    container.querySelectorAll('.btn-select-template').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = btn.getAttribute('data-index');
+        const target = messageTemplatesList[idx];
+        const textarea = document.getElementById('send-message-body');
+        if (textarea && target) {
+          textarea.value = target.content;
+        }
+      });
+    });
+  } catch (err) {
+    console.error('Error rendering templates:', err);
+    container.innerHTML = '<span style="font-size: 11px; color: var(--danger);">Failed to load templates.</span>';
+  }
+}
+
+// --- INITIALIZE APPLICATION ---
+async function initApp() {
+  // Block pinch-to-zoom
+  document.addEventListener('touchstart', (e) => {
+    if (e.touches.length > 1) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  // Restore view states from localStorage
+  try {
+    const savedNotesStack = localStorage.getItem('notesFolderStack');
+    if (savedNotesStack && savedNotesStack !== 'null') notesFolderStack = JSON.parse(savedNotesStack);
+  } catch (e) { console.error('Error restoring notesFolderStack:', e); }
+
+  try {
+    const savedPapersStack = localStorage.getItem('papersFolderStack');
+    if (savedPapersStack && savedPapersStack !== 'null') papersFolderStack = JSON.parse(savedPapersStack);
+  } catch (e) { console.error('Error restoring papersFolderStack:', e); }
+
+  try {
+    const savedResourcesFolder = localStorage.getItem('currentResourcesFolder');
+    if (savedResourcesFolder && savedResourcesFolder !== 'null') currentResourcesFolder = JSON.parse(savedResourcesFolder);
+  } catch (e) { console.error('Error restoring currentResourcesFolder:', e); }
+
+  try {
+    const savedSimStack = localStorage.getItem('simulationFolderStack') || localStorage.getItem('roadmapFolderStack');
+    if (savedSimStack) {
+      simulationFolderStack = JSON.parse(savedSimStack);
+      roadmapFolderStack = simulationFolderStack;
+    }
+  } catch (e) { console.error('Error restoring simulationFolderStack:', e); }
+
+  try {
+    const savedLabStack = localStorage.getItem('labManualsFolderStack');
+    if (savedLabStack && savedLabStack !== 'null') labManualsFolderStack = JSON.parse(savedLabStack);
+  } catch (e) { console.error('Error restoring labManualsFolderStack:', e); }
+
+  const savedResourcesSection = localStorage.getItem('currentResourcesSection');
+  if (savedResourcesSection) {
+    currentResourcesSection = savedResourcesSection === 'roadmaps' ? 'simulations' : savedResourcesSection;
+  }
+
+
+
+  // Initialize and run the elegant cursive calligraphy loading animation
+  const loaderAnimPromise = initCursiveLoader();
+
+  const token = localStorage.getItem('token');
+  const loaderEl = document.getElementById('view-loading');
+  if (loaderEl) loaderEl.style.display = 'flex';
+  const adSpace = document.getElementById('site-ad-space');
+  if (adSpace) adSpace.style.display = 'none';
+
+  if (token) {
+    try {
+      currentUser = await api.getMe();
+      localStorage.setItem('user', JSON.stringify(currentUser));
+      startNotificationPolling();
+      // Ensure push token is up to date on app launch
+      setTimeout(setupPushNotifications, 3000);
+    } catch (err) {
+      console.error('Session validation failed:', err.message);
+      if (err.status === 401 || err.status === 403) {
+        api.logout();
+        currentUser = null;
+      } else {
+        // Fallback to cached localStorage user if server is offline or reconnecting
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          try {
+            currentUser = JSON.parse(userStr);
+            startNotificationPolling();
+          } catch (e) {
+            api.logout();
+            currentUser = null;
+          }
+        } else {
+          api.logout();
+          currentUser = null;
+        }
+      }
+    }
+  }
+
+  // Pre-load note folders in memory for dropdown tagging inside syllabus upload (non-blocking)
+  api.getFolders('notes')
+    .then(list => { notesFoldersList = list; })
+    .catch(err => console.error('Failed pre-loading subjects list', err));
+  
+  updateNavbar();
+  initEventHandlers();
+
+  initContributionEventHandlers();
+  initEditorEventHandlers();
+  initReviewEventHandlers();
+  initEmailModalEventHandlers();
+  initEditNameModalEventHandlers();
+  initForgotPasswordEventHandlers();
+  initAdminEmailModalEventHandlers();
+  initUserExportEventHandlers();
+
+  // Update mobile bottom nav position on window resizing
+  window.addEventListener('resize', updateMobileBottomNavPosition);
+
+  // Initialize PC navbar scroll animation (anime.js powered)
+  initDesktopScrollNav();
+  
+  // Initialize Scroll Progress Bar
+  initScrollProgressBar();
+  
+  // Clear legacy color theme overrides to ensure StudyMyte classic blue default
+  clearLegacyColorTheme();
+
+  // Initialize Font Style from localStorage
+  const savedFontKey = localStorage.getItem('studymyte-app-font') || 'inter';
+  applyFontStyle(savedFontKey, false);
+
+  // Initialize Theme Mode (Light / Dark)
+  if (typeof initThemeModeToggle === 'function') {
+    initThemeModeToggle();
+  }
+  
+  // Run routing trigger to render current view behind loading screen
+  await router();
+
+  // Check if logged-in account needs to link an email address
+  checkCompulsoryEmail();
+
+  // Ensure handwriting animation and initial float finish smoothly before transitioning
+  try {
+    await loaderAnimPromise;
+  } catch (e) {}
+
+
+  // Smooth cinematic GSAP fade-out transition into the website
+  if (loaderEl && typeof gsap !== 'undefined') {
+    gsap.to(loaderEl, {
+      opacity: 0,
+      scale: 1.02,
+      duration: 0.55,
+      ease: 'power2.inOut',
+      onComplete: () => {
+        const wrapper = document.getElementById('sh-cursive-wrapper');
+        if (wrapper) gsap.killTweensOf(wrapper);
+        loaderEl.style.display = 'none';
+        loaderEl.style.opacity = '0';
+        if (adSpace) adSpace.style.display = '';
+      }
+    });
+  } else if (loaderEl) {
+    loaderEl.style.display = 'none';
+    if (adSpace) adSpace.style.display = '';
+  }
+}
+
+let cursiveLoaderPromise = null;
+let animStarted = false;
+
+function initCursiveLoader() {
+  if (cursiveLoaderPromise) return cursiveLoaderPromise;
+
+  cursiveLoaderPromise = new Promise(resolve => {
+    let resolved = false;
+    const safeResolve = () => {
+      if (!resolved) {
+        resolved = true;
+        resolve();
+      }
+    };
+
+    // Safety timeout: Never hang for more than 3.5s if GSAP CDN fails or network hangs
+    const safetyTimer = setTimeout(safeResolve, 3500);
+
+    function start() {
+      if (animStarted) return;
+      animStarted = true;
+
+      const clipRect = document.getElementById('sh-clip-rect');
+      const penTip = document.getElementById('sh-pen-tip');
+      const subtitle = document.getElementById('sh-loader-subtitle');
+      const wrapper = document.getElementById('sh-cursive-wrapper');
+
+      if (!clipRect || !penTip || !wrapper || typeof gsap === 'undefined') {
+        clearTimeout(safetyTimer);
+        safeResolve();
+        return;
+      }
+
+      const tl = gsap.timeline({
+        onComplete: () => {
+          clearTimeout(safetyTimer);
+          safeResolve();
+        }
+      });
+
+      // Pen tracer starts at the letter 'S' (16%)
+      tl.set(penTip, { left: '16%', top: '50%', opacity: 1, scale: 0.5 })
+        .to(penTip, { scale: 1, duration: 0.2, ease: "back.out(2)" })
+        // 1. Handwriting animation: sweep clip rect across letters while pen traces wave
+        .to(clipRect, {
+          attr: { width: 480 },
+          duration: 1.6,
+          ease: "power1.inOut"
+        }, "-=0.1")
+        .to(penTip, {
+          left: '84%',
+          duration: 1.6,
+          ease: "power1.inOut"
+        }, "<")
+        // Micro-oscillations on pen tip vertical to simulate writing strokes
+        .to(penTip, {
+          y: "-=13",
+          repeat: 7,
+          yoyo: true,
+          duration: 0.1,
+          ease: "sine.inOut"
+        }, "<")
+        // Pen tip flourish fade out
+        .to(penTip, {
+          opacity: 0,
+          scale: 2.2,
+          duration: 0.3,
+          ease: "power2.out"
+        })
+        // Subtitle soft fade in
+        .to(subtitle, {
+          opacity: 1,
+          y: 0,
+          duration: 0.5,
+          ease: "power2.out"
+        }, "-=0.2")
+        // Start continuous gentle floating and breathing pulse
+        .call(() => {
+          gsap.to(wrapper, {
+            y: -7,
+            scale: 1.02,
+            duration: 1.6,
+            repeat: -1,
+            yoyo: true,
+            ease: "sine.inOut"
+          });
+        }, null, "-=0.2");
+    }
+
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(start);
+    }
+    setTimeout(start, 250);
+  });
+
+  return cursiveLoaderPromise;
+}
+
+/* ============================================================
+   AUTH PAGE ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â REAL 3D OPEN BOOK DESIGN & CONTINUOUS PAGE FLIP
+   ============================================================ */
+let _currentAuthBookMode = 'login'; // 'login' | 'signup'
+let _bookFlipInProgress = false;
+
+function spawnAuthParticles() { initAuthScene(); } // legacy alias
+
+function setAuthFlipDirection(dir) { /* no-op alias */ }
+
+/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ setAuthBookMode: Instantly or cleanly sets the book to Login or Signup ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */
+function setAuthBookMode(targetMode, animate = false) {
+  if (animate && targetMode !== _currentAuthBookMode) {
+    flipAuthPage(targetMode);
+    return;
+  }
+
+  _currentAuthBookMode = targetMode;
+
+  const panelLogin = document.getElementById('auth-panel-login');
+  const panelSignup = document.getElementById('auth-panel-signup');
+  const headerTitle = document.getElementById('book-header-page-title');
+  const headerPage = document.getElementById('book-header-page-num');
+  const btnToggleText = document.getElementById('btn-turn-page-text');
+  const curlLabel = document.getElementById('curl-label-text');
+  const footerSection = document.getElementById('book-footer-section-text');
+
+  if (targetMode === 'signup') {
+    if (panelLogin) panelLogin.classList.remove('active');
+    if (panelSignup) panelSignup.classList.add('active');
+    if (headerTitle) headerTitle.textContent = 'SCHOLAR REGISTRATION';
+    if (headerPage) headerPage.textContent = 'PAGE 3';
+    if (btnToggleText) btnToggleText.textContent = 'Turn Page to Login';
+    if (curlLabel) curlLabel.textContent = 'LOGIN ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¾ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â';
+    if (footerSection) footerSection.textContent = '• SECTION B : NEW ENROLLMENT •';
+  } else {
+    if (panelSignup) panelSignup.classList.remove('active');
+    if (panelLogin) panelLogin.classList.add('active');
+    if (headerTitle) headerTitle.textContent = 'STUDENT ACCESS';
+    if (headerPage) headerPage.textContent = 'PAGE 2';
+    if (btnToggleText) btnToggleText.textContent = 'Turn Page to Sign Up';
+    if (curlLabel) curlLabel.textContent = 'SIGN UP ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¾ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â';
+    if (footerSection) footerSection.textContent = '• SECTION B : PORTAL CREDENTIALS •';
+  }
+
+  // Ensure scene atmosphere is running
+  initAuthScene();
+}
+
+/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ flipAuthPage: Continuous, photorealistic 3D page turn around center spine ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */
+function flipAuthPage(targetMode) {
+  if (_bookFlipInProgress || targetMode === _currentAuthBookMode) return;
+  _bookFlipInProgress = true;
+
+  const leaf = document.getElementById('book-turning-leaf');
+  const frontLight = document.getElementById('leaf-front-lighting');
+  const backLight = document.getElementById('leaf-back-lighting');
+  const castShadow = document.getElementById('leaf-cast-shadow');
+  const bookCasing = document.querySelector('.real-book-casing');
+
+  // Fallback if elements not found or GSAP missing
+  if (!leaf || typeof gsap === 'undefined') {
+    setAuthBookMode(targetMode, false);
+    window.location.hash = targetMode === 'signup' ? '#/signup' : '#/login';
+    _bookFlipInProgress = false;
+    return;
+  }
+
+  const isMobile = window.innerWidth <= 860;
+  if (isMobile) {
+    // Clean, crisp responsive slide on mobile screens
+    setAuthBookMode(targetMode, false);
+    window.location.hash = targetMode === 'signup' ? '#/signup' : '#/login';
+    _bookFlipInProgress = false;
+    return;
+  }
+
+  // ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ FORWARD FLIP: LOGIN ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¾ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â SIGNUP ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
+  if (targetMode === 'signup') {
+    // 1. Reveal Signup panel immediately on base page underneath the leaf
+    const panelLogin = document.getElementById('auth-panel-login');
+    const panelSignup = document.getElementById('auth-panel-signup');
+    if (panelLogin) panelLogin.classList.remove('active');
+    if (panelSignup) panelSignup.classList.add('active');
+
+    // 2. Set Leaf initial state resting flat on right page
+    gsap.set(leaf, {
+      visibility: 'visible',
+      rotateY: 0,
+      skewY: 0,
+      scaleY: 1,
+      transformOrigin: 'left center',
+      transformPerspective: 2200,
+      zIndex: 25,
+    });
+    if (frontLight) gsap.set(frontLight, { opacity: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.5) 0%, transparent 80%)' });
+    if (backLight) gsap.set(backLight, { opacity: 0.6, background: 'linear-gradient(to left, rgba(0,0,0,0.5) 0%, transparent 80%)' });
+    if (castShadow) gsap.set(castShadow, { opacity: 0.1, scaleX: 0.8, transformOrigin: 'left center' });
+
+    // Update text labels
+    const headerTitle = document.getElementById('book-header-page-title');
+    const headerPage = document.getElementById('book-header-page-num');
+    const btnToggleText = document.getElementById('btn-turn-page-text');
+    const curlLabel = document.getElementById('curl-label-text');
+    const footerSection = document.getElementById('book-footer-section-text');
+
+    if (headerTitle) headerTitle.textContent = 'SCHOLAR REGISTRATION';
+    if (headerPage) headerPage.textContent = 'PAGE 3';
+    if (btnToggleText) btnToggleText.textContent = 'Turn Page to Login';
+    if (curlLabel) curlLabel.textContent = 'LOGIN ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¾ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â';
+    if (footerSection) footerSection.textContent = '• SECTION B : NEW ENROLLMENT •';
+
+    // 3. Play GSAP Physics Timeline
+    const tl = gsap.timeline({
+      onComplete: () => {
+        gsap.set(leaf, { visibility: 'hidden' });
+        if (castShadow) gsap.set(castShadow, { opacity: 0 });
+        _currentAuthBookMode = 'signup';
+        _bookFlipInProgress = false;
+        window.location.hash = '#/signup';
+      }
+    });
+
+    // Step A: Lift & paper curl (0deg ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¾ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â -90deg)
+    tl.to(leaf, {
+      rotateY: -90,
+      skewY: -6,
+      scaleY: 1.025,
+      duration: 0.42,
+      ease: 'power2.in',
+    }, 0)
+    .to(frontLight, { opacity: 0.65, duration: 0.38, ease: 'power2.in' }, 0)
+    .to(castShadow, { opacity: 0.6, scaleX: 1.15, duration: 0.38, ease: 'power2.in' }, 0)
+    .to(bookCasing, { rotateY: -1.5, duration: 0.42, ease: 'power1.inOut' }, 0);
+
+    // Step B: Sweep over spine & settle onto left page (-90deg ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¾ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â -180deg)
+    tl.to(leaf, {
+      rotateY: -180,
+      skewY: 0,
+      scaleY: 1,
+      duration: 0.45,
+      ease: 'power3.out',
+    }, 0.42)
+    .to(backLight, { opacity: 0, duration: 0.4, ease: 'power2.out' }, 0.42)
+    .to(castShadow, { opacity: 0, scaleX: 0.5, duration: 0.35, ease: 'power2.out' }, 0.42)
+    .to(bookCasing, { rotateY: 0, duration: 0.48, ease: 'back.out(1.4)' }, 0.42);
+
+  } else {
+    // ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ BACKWARD FLIP: SIGNUP ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¾ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â LOGIN ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
+    const panelLogin = document.getElementById('auth-panel-login');
+    const panelSignup = document.getElementById('auth-panel-signup');
+    if (panelSignup) panelSignup.classList.remove('active');
+    if (panelLogin) panelLogin.classList.add('active');
+
+    gsap.set(leaf, {
+      visibility: 'visible',
+      rotateY: -180,
+      skewY: 0,
+      scaleY: 1,
+      transformOrigin: 'left center',
+      transformPerspective: 2200,
+      zIndex: 25,
+    });
+    if (backLight) gsap.set(backLight, { opacity: 0.6, background: 'linear-gradient(to left, rgba(0,0,0,0.5) 0%, transparent 80%)' });
+    if (frontLight) gsap.set(frontLight, { opacity: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.5) 0%, transparent 80%)' });
+    if (castShadow) gsap.set(castShadow, { opacity: 0.5, scaleX: 1.1, transformOrigin: 'left center' });
+
+    const headerTitle = document.getElementById('book-header-page-title');
+    const headerPage = document.getElementById('book-header-page-num');
+    const btnToggleText = document.getElementById('btn-turn-page-text');
+    const curlLabel = document.getElementById('curl-label-text');
+    const footerSection = document.getElementById('book-footer-section-text');
+
+    if (headerTitle) headerTitle.textContent = 'STUDENT ACCESS';
+    if (headerPage) headerPage.textContent = 'PAGE 2';
+    if (btnToggleText) btnToggleText.textContent = 'Turn Page to Sign Up';
+    if (curlLabel) curlLabel.textContent = 'SIGN UP ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¾ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â';
+    if (footerSection) footerSection.textContent = '• SECTION B : PORTAL CREDENTIALS •';
+
+    const tl = gsap.timeline({
+      onComplete: () => {
+        gsap.set(leaf, { visibility: 'hidden' });
+        if (castShadow) gsap.set(castShadow, { opacity: 0 });
+        _currentAuthBookMode = 'login';
+        _bookFlipInProgress = false;
+        window.location.hash = '#/login';
+      }
+    });
+
+    // Lift off left page (-180deg ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¾ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â -90deg)
+    tl.to(leaf, {
+      rotateY: -90,
+      skewY: 6,
+      scaleY: 1.025,
+      duration: 0.42,
+      ease: 'power2.in',
+    }, 0)
+    .to(backLight, { opacity: 0.7, duration: 0.38, ease: 'power2.in' }, 0)
+    .to(castShadow, { opacity: 0.65, scaleX: 1.2, duration: 0.38, ease: 'power2.in' }, 0)
+    .to(bookCasing, { rotateY: 1.5, duration: 0.42, ease: 'power1.inOut' }, 0);
+
+    // Settle onto right page (-90deg ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¾ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â 0deg)
+    tl.to(leaf, {
+      rotateY: 0,
+      skewY: 0,
+      scaleY: 1,
+      duration: 0.46,
+      ease: 'back.out(1.2)',
+    }, 0.42)
+    .to(frontLight, { opacity: 0, duration: 0.4, ease: 'power2.out' }, 0.42)
+    .to(castShadow, { opacity: 0, scaleX: 0.6, duration: 0.38, ease: 'power2.out' }, 0.42)
+    .to(bookCasing, { rotateY: 0, duration: 0.48, ease: 'back.out(1.4)' }, 0.42);
+  }
+}
+
+/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ initAuthScene: Atmosphere, Lucide icons, event listeners, and 3D desk tilt ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */
+function initAuthScene() {
+  if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    window.lucide.createIcons();
+  }
+
+  // Remove stale bubbles
+  document.querySelectorAll('.auth-bubble, .auth-sparkle').forEach(el => el.remove());
+
+  const scene = document.querySelector('.auth-scene');
+  if (!scene) return;
+
+  // ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Spawn Floating Study Bubbles ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
+  const BUBBLE_COUNT = 20;
+  for (let i = 0; i < BUBBLE_COUNT; i++) {
+    const b = document.createElement('div');
+    b.className = 'auth-bubble';
+    const size = 14 + Math.random() * 38;
+    const bx = (Math.random() - 0.5) * 80;
+    const bx2 = (Math.random() - 0.5) * 60;
+    b.style.cssText = `
+      width:${size}px; height:${size}px;
+      left:${Math.random() * 100}%;
+      bottom:-${size + 10}px;
+      --bx:${bx}px; --bx2:${bx2}px;
+      animation-duration:${12 + Math.random() * 20}s;
+      animation-delay:-${Math.random() * 16}s;
+      opacity:${0.4 + Math.random() * 0.5};
+    `;
+    scene.appendChild(b);
+  }
+
+  // ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Spawn Sparkles ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
+  const SPARKLE_COUNT = 14;
+  for (let i = 0; i < SPARKLE_COUNT; i++) {
+    const s = document.createElement('div');
+    s.className = 'auth-sparkle';
+    const size = 3 + Math.random() * 5;
+    s.style.cssText = `
+      width:${size}px; height:${size}px;
+      left:${Math.random() * 100}%;
+      top:${Math.random() * 100}%;
+      animation-duration:${2 + Math.random() * 4}s;
+      animation-delay:-${Math.random() * 4}s;
+      opacity:${0.5 + Math.random() * 0.5};
+      background: hsl(${210 + Math.random() * 30}, 85%, 65%);
+    `;
+    scene.appendChild(s);
+  }
+
+  // ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ 3D Desk Mouse Tilt (Desktop only) ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
+  const bookStand = document.querySelector('.real-book-stand');
+  if (bookStand && window.innerWidth > 860 && !bookStand._tiltBound) {
+    bookStand._tiltBound = true;
+
+    const onMouseMove = (e) => {
+      const r = bookStand.getBoundingClientRect();
+      const dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+      const dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+      gsap
+        ? gsap.to(bookStand, { rotateX: -dy * 3.5, rotateY: dx * 4.5, duration: 0.35, ease: 'power2.out', transformPerspective: 2200 })
+        : (bookStand.style.transform = `perspective(2200px) rotateX(${-dy * 3.5}deg) rotateY(${dx * 4.5}deg)`);
+    };
+
+    const onMouseLeave = () => {
+      gsap
+        ? gsap.to(bookStand, { rotateX: 0, rotateY: 0, duration: 0.5, ease: 'power3.out' })
+        : (bookStand.style.transform = '');
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    bookStand.addEventListener('mouseleave', onMouseLeave);
+
+    bookStand._tiltCleanup = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      bookStand.removeEventListener('mouseleave', onMouseLeave);
+      if (gsap) gsap.killTweensOf(bookStand);
+      bookStand.style.transform = '';
+      bookStand._tiltBound = false;
+    };
+  }
+
+  // ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Wire Interactive Flip Triggers ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
+  const btnToggle = document.getElementById('btn-turn-page-toggle');
+  if (btnToggle && !btnToggle._flipBound) {
+    btnToggle._flipBound = true;
+    btnToggle.addEventListener('click', () => {
+      flipAuthPage(_currentAuthBookMode === 'login' ? 'signup' : 'login');
+    });
+  }
+
+  const linkToSignup = document.getElementById('link-switch-to-signup');
+  if (linkToSignup && !linkToSignup._flipBound) {
+    linkToSignup._flipBound = true;
+    linkToSignup.addEventListener('click', (e) => {
+      e.preventDefault();
+      flipAuthPage('signup');
+    });
+  }
+
+  const linkToLogin = document.getElementById('link-switch-to-login');
+  if (linkToLogin && !linkToLogin._flipBound) {
+    linkToLogin._flipBound = true;
+    linkToLogin.addEventListener('click', (e) => {
+      e.preventDefault();
+      flipAuthPage('login');
+    });
+  }
+
+  const cornerCurl = document.getElementById('corner-curl-trigger');
+  if (cornerCurl && !cornerCurl._flipBound) {
+    cornerCurl._flipBound = true;
+    cornerCurl.addEventListener('click', () => {
+      flipAuthPage(_currentAuthBookMode === 'login' ? 'signup' : 'login');
+    });
+  }
+}
+
+// Launch app
+window.addEventListener('DOMContentLoaded', initApp);
+
+// Setup Firebase Push Notifications for Web and Median App
+async function setupPushNotifications() {
+  try {
+    // 1. If running in Median App (Android), extract the token from Median's JS Bridge
+    if (typeof median !== 'undefined' && median.firebaseMessaging) {
+       median.firebaseMessaging.getToken().then(function(token) {
+          if (token) api.registerFCMToken(token);
+       }).catch(e => console.log('Median FCM Error:', e));
+       return;
+    }
+
+    // 2. If running on Website, get standard Web Push token
+    if (window.firebaseMessaging && window.firebaseGetToken && 'serviceWorker' in navigator) {
+      const fb = window.firebaseConfig;
+      const swUrl = fb && fb.apiKey
+        ? `/sw.js?apiKey=${encodeURIComponent(fb.apiKey)}&projectId=${encodeURIComponent(fb.projectId)}&messagingSenderId=${encodeURIComponent(fb.messagingSenderId || '')}&appId=${encodeURIComponent(fb.appId || '')}`
+        : '/sw.js';
+      const swRegistration = await navigator.serviceWorker.register(swUrl);
+      
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        const currentToken = await window.firebaseGetToken(window.firebaseMessaging, {
+          vapidKey: 'BG6EcL4jmtWz4i4EJLsHtKD-GcQADqZTvoulYMAPFZ9Q-EKTWuT8Jo6jnW5JRA3pcqyPRYBCTfmIzy5JFAzZ6sg',
+          serviceWorkerRegistration: swRegistration
+        });
+        
+        if (currentToken) {
+          await api.registerFCMToken(currentToken);
+        }
+
+        // Listen for foreground messages
+        if (window.firebaseOnMessage) {
+          window.firebaseOnMessage(window.firebaseMessaging, (payload) => {
+            console.log('Message received in foreground: ', payload);
+            
+            // Force a native browser popup even when the tab is open
+            if (Notification.permission === 'granted') {
+              new Notification(payload.notification.title, {
+                body: payload.notification.body,
+                icon: '/icons/icon-192x192.png' // Add an icon if you have one
+              });
+            }
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error setting up push notifications:", err);
+  }
+}
+
+async function handleLikeToggle(e, viewRefreshCallback) {
+  e.stopPropagation();
+  const btn = e.currentTarget;
+  const docId = btn.getAttribute('data-id');
+  if (!docId) return;
+
+  btn.disabled = true;
+
+  // --- Optimistic UI Update ---
+  const isLiked = btn.classList.contains('liked');
+  const countSpan = btn.querySelector('.like-count');
+  let currentCount = parseInt(countSpan.textContent) || 0;
+
+  // Instantly toggle the UI locally
+  if (isLiked) {
+    btn.classList.remove('liked');
+    btn.style.color = 'var(--text-muted)';
+    btn.title = 'Like this resource';
+    currentCount = Math.max(0, currentCount - 1);
+  } else {
+    btn.classList.add('liked');
+    btn.style.color = 'var(--danger)';
+    btn.title = 'Unlike this resource';
+    currentCount += 1;
+  }
+  countSpan.textContent = currentCount;
+
+  // Update the SVG icon fill/stroke directly if Lucide has already rendered it
+  const icon = btn.querySelector('svg');
+  if (icon) {
+    if (isLiked) {
+      icon.style.fill = 'none';
+      icon.style.stroke = 'currentColor';
+    } else {
+      icon.style.fill = 'var(--danger)';
+      icon.style.stroke = 'var(--danger)';
+    }
+  }
+
+  try {
+    // Send background API request without waiting for it to complete the UI update
+    await api.toggleLikeDocument(docId);
+    btn.disabled = false;
+    // Note: We intentionally skip await viewRefreshCallback() to prevent the whole page from reloading/re-rendering!
+  } catch (err) {
+    // Revert UI if the network request fails
+    if (isLiked) {
+      btn.classList.add('liked');
+      btn.style.color = 'var(--danger)';
+      countSpan.textContent = currentCount + 1;
+      if (icon) { icon.style.fill = 'var(--danger)'; icon.style.stroke = 'var(--danger)'; }
+    } else {
+      btn.classList.remove('liked');
+      btn.style.color = 'var(--text-muted)';
+      countSpan.textContent = currentCount - 1;
+      if (icon) { icon.style.fill = 'none'; icon.style.stroke = 'currentColor'; }
+    }
+    alert(err.message || 'Failed to toggle like');
+    btn.disabled = false;
+  }
+}
+
+async function renderTeacherDashboardView() {
+  const statsOwnUploads = document.getElementById('stats-own-uploads');
+  const statsOwnLikes = document.getElementById('stats-own-likes');
+  const statsTotalTeacherUploads = document.getElementById('stats-total-teacher-uploads');
+  const rankingListContainer = document.getElementById('dashboard-ranking-list');
+
+  if (!statsOwnUploads || !statsOwnLikes || !statsTotalTeacherUploads || !rankingListContainer) return;
+
+  statsOwnUploads.textContent = '...';
+  statsOwnLikes.textContent = '...';
+  statsTotalTeacherUploads.textContent = '...';
+  rankingListContainer.innerHTML = getListSkeleton();
+
+  try {
+    const stats = await api.getTeacherStats();
+    statsOwnUploads.textContent = stats.ownFilesCount;
+    statsOwnLikes.textContent = stats.ownLikesCount;
+    statsTotalTeacherUploads.textContent = stats.totalTeacherFiles;
+
+
+    refreshIcons();
+  } catch (err) {
+    console.error('Error loading teacher stats/ranking:', err);
+    rankingListContainer.innerHTML = `<div class="empty-state" style="color: var(--danger);">Failed to load stats/ranking: ${escapeHTML(err.message)}</div>`;
+  }
+}
+
+async function renderPendingContributions() {
+  const pendingDocsCount = document.getElementById('pending-docs-count');
+  const clustersWrapper = document.getElementById('pending-duplicate-clusters-wrapper');
+  const clustersHeader = document.getElementById('pending-duplicate-clusters-header');
+  const clustersCountEl = document.getElementById('duplicate-clusters-count');
+  const clustersList = document.getElementById('pending-duplicate-clusters-list');
+  const singleTitle = document.getElementById('pending-single-items-title');
+  const pendingDocsContainer = document.getElementById('pending-docs-list-container');
+
+  if (!pendingDocsContainer) return;
+
+  pendingDocsContainer.innerHTML = getListSkeleton();
+  if (clustersList) clustersList.innerHTML = '';
+  if (clustersHeader) clustersHeader.style.display = 'none';
+  if (singleTitle) singleTitle.style.display = 'none';
+
+  try {
+    // 1. Fetch pending documents and duplicate groups in parallel
+    const [pendingDocs, dupGroupsRes] = await Promise.all([
+      api.getPendingDocuments(),
+      api.getDuplicateGroups({ status: 'needs_review' }).catch(() => ({ groups: [] }))
+    ]);
+
+    const allGroups = (dupGroupsRes && dupGroupsRes.groups) ? dupGroupsRes.groups : (Array.isArray(dupGroupsRes) ? dupGroupsRes : []);
+    
+    // Total count of pending contributions
+    if (pendingDocsCount) pendingDocsCount.textContent = pendingDocs.length;
+
+    if (pendingDocs.length === 0) {
+      if (clustersWrapper) clustersWrapper.style.display = 'none';
+      pendingDocsContainer.innerHTML = `
+        <div class="empty-state" style="padding: 36px 20px; text-align: center; background: var(--bg-card); border-radius: 12px; border: 1px dashed var(--border-color);">
+          <div style="width: 48px; height: 48px; border-radius: 50%; background: rgba(34, 197, 94, 0.1); color: var(--success); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px auto;">
+            <i data-lucide="check-circle" style="width: 26px; height: 26px;"></i>
+          </div>
+          <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 6px; color: var(--text-main);">No Pending Contributions</h4>
+          <p style="font-size: 13px; color: var(--text-muted); max-width: 420px; margin: 0 auto;">
+            All resources uploaded by students, educators, and admins are approved or resolved.
+          </p>
+        </div>
+      `;
+      refreshIcons();
+      return;
+    }
+
+    if (clustersWrapper) clustersWrapper.style.display = 'block';
+
+    // 2. Map pending documents into clusters (by duplicateGroupId, identityKey, or fileHash)
+    // Identify groups that contain at least 2 pending candidates
+    const pendingDocMap = new Map();
+    pendingDocs.forEach(d => pendingDocMap.set(String(d.id), d));
+
+    // Also auto-cluster any pending docs sharing identical fileHash or identityKey even if not yet saved to a group
+    const hashGroups = new Map();
+    pendingDocs.forEach(d => {
+      if (d.fileHash) {
+        if (!hashGroups.has(d.fileHash)) hashGroups.set(d.fileHash, []);
+        hashGroups.get(d.fileHash).push(d);
+      }
+    });
+
+    const identityGroups = new Map();
+    pendingDocs.forEach(d => {
+      const idKey = d.examIdentity?.identityKey || (d.duplicateStatus?.duplicateGroupId ? String(d.duplicateStatus.duplicateGroupId) : null);
+      if (idKey) {
+        if (!identityGroups.has(idKey)) identityGroups.set(idKey, []);
+        identityGroups.get(idKey).push(d);
+      }
+    });
+
+    // Identify candidate docs that are part of a multi-item cluster
+    const clusteredDocIds = new Set();
+    const activeClusters = [];
+
+    // Check DB duplicate groups
+    allGroups.forEach(g => {
+      const groupCandidates = (g.candidates || []).filter(c => pendingDocMap.has(String(c.id || c._id)));
+      if (groupCandidates.length >= 2) {
+        groupCandidates.forEach(c => clusteredDocIds.add(String(c.id || c._id)));
+        activeClusters.push({
+          id: g.id || g._id,
+          title: `${g.subject || 'Resource Cluster'} (${g.branch || 'All Branches'})`,
+          identityKey: g.identityKey,
+          branch: g.branch,
+          semester: g.semester,
+          year: g.year,
+          examType: g.examType,
+          candidates: groupCandidates
+        });
+      }
+    });
+
+    // Check identical hash collisions among pending items
+    hashGroups.forEach((docs, hash) => {
+      if (docs.length >= 2) {
+        const unclustered = docs.filter(d => !clusteredDocIds.has(String(d.id)));
+        if (unclustered.length >= 2) {
+          unclustered.forEach(d => clusteredDocIds.add(String(d.id)));
+          activeClusters.push({
+            id: unclustered[0].duplicateStatus?.duplicateGroupId || `hash-${hash.substring(0, 10)}`,
+            title: `${unclustered[0].title} (Exact Identical Uploads)`,
+            identityKey: `sha256:${hash.substring(0, 16)}`,
+            branch: unclustered[0].examIdentity?.branch || 'All Branches',
+            year: unclustered[0].year,
+            examType: unclustered[0].type,
+            candidates: unclustered,
+            isExactMatch: true
+          });
+        }
+      }
+    });
+
+    // 3. Render Duplicate Clusters if any exist
+    if (activeClusters.length > 0 && clustersList && clustersHeader) {
+      clustersHeader.style.display = 'flex';
+      if (clustersCountEl) clustersCountEl.textContent = activeClusters.length;
+
+      clustersList.innerHTML = activeClusters.map(cluster => {
+        return `
+          <div class="card duplicate-group-card" data-group-id="${cluster.id}" style="margin-bottom: 20px; border: 2px solid rgba(59, 130, 246, 0.3); border-radius: 12px; padding: 18px; background: rgba(59, 130, 246, 0.02); box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">
+                  <span class="badge" style="background: #fee2e2; color: #dc2626; font-weight: 700; padding: 4px 8px; border-radius: 6px; font-size: 11px; text-transform: uppercase;">
+                    <i data-lucide="alert-triangle" style="width: 12px; height: 12px; display: inline-block; vertical-align: middle;"></i> Duplicate Cluster (${cluster.candidates.length} Copies)
+                  </span>
+                  ${cluster.isExactMatch ? `<span class="badge" style="background: #fef08a; color: #854d0e; font-weight: 700; padding: 4px 8px; border-radius: 6px; font-size: 11px;">100% Exact Byte Match</span>` : ''}
+                  ${cluster.branch ? `<span class="badge" style="background: #e0e7ff; color: #4338ca; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;">Branch: ${escapeHTML(cluster.branch)}</span>` : ''}
+                  ${cluster.year ? `<span class="badge" style="background: #f1f5f9; color: #475569; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;">Year: ${escapeHTML(cluster.year)}</span>` : ''}
+                </div>
+                <h4 style="font-size: 17px; font-weight: 700; color: var(--text-main); margin-bottom: 4px;">
+                  ${escapeHTML(cluster.title)}
+                </h4>
+                <p style="font-size: 12px; color: var(--text-muted); margin: 0;">
+                  Pick the cleanest scan to approve as the canonical winner, or accept/delete individually below.
+                </p>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px; margin-top: 12px;">
+              ${cluster.candidates.map(doc => {
+                const docId = doc.id || doc._id;
+                const qScore = typeof doc.qualityScore === 'number' ? doc.qualityScore : 50;
+                const scoreColor = qScore >= 75 ? '#16a34a' : (qScore >= 50 ? '#ca8a04' : '#dc2626');
+                const scoreBg = qScore >= 75 ? '#dcfce7' : (qScore >= 50 ? '#fef9c3' : '#fee2e2');
+
+                return `
+                  <div class="candidate-doc-card" style="border: 1px solid var(--border-color); border-radius: 10px; padding: 14px; background: var(--bg-card); display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
+                        <h6 style="font-size: 15px; font-weight: 700; color: var(--text-main); margin: 0; line-height: 1.3;">
+                          ${escapeHTML(doc.title)}
+                        </h6>
+                        <span style="font-size: 11px; font-weight: 800; padding: 2px 6px; border-radius: 6px; background: ${scoreBg}; color: ${scoreColor}; white-space: nowrap;">
+                          Score: ${qScore}/100
+                        </span>
+                      </div>
+
+                      <div style="font-size: 12px; color: var(--text-muted); display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 8px; padding: 6px 8px; background: rgba(0,0,0,0.02); border-radius: 6px;">
+                        <div>Pages: <strong>${doc.pageCount || 1}</strong></div>
+                        <div>Digital Text: <strong>${doc.hasText ? 'Yes &check;' : 'Scan/Image'}</strong></div>
+                        <div>Category: <strong style="text-transform: capitalize;">${escapeHTML(doc.type || 'resource')}</strong></div>
+                        <div>Size: <strong>${doc.fileSizeBytes ? (doc.fileSizeBytes / (1024 * 1024)).toFixed(2) + ' MB' : 'N/A'}</strong></div>
+                      </div>
+
+                      <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+                        <div>Contributor: <strong>${escapeHTML(doc.contributorName || doc.uploadedBy || 'Contributor')}</strong> (${escapeHTML(doc.contributorPhone || 'N/A')})</div>
+                        <div>Submitted: ${new Date(doc.createdAt).toLocaleString()}</div>
+                      </div>
+                    </div>
+
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.06);">
+                      <a href="${escapeHTML(doc.fileUrl)}" target="_blank" class="btn btn-secondary btn-sm" style="flex: 1; min-width: 75px; font-size: 12px; padding: 6px 8px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+                        <i data-lucide="eye" style="width: 13px; height: 13px;"></i> View
+                      </a>
+                      <button class="btn btn-primary btn-sm btn-select-canonical" data-group-id="${cluster.id}" data-doc-id="${docId}" style="flex: 1.3; min-width: 120px; font-size: 12px; padding: 6px 8px; background: #16a34a; border-color: #16a34a; display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-weight: 700;" title="Approve this file as canonical winner and mark others as duplicates">
+                        <i data-lucide="check-check" style="width: 14px; height: 14px;"></i> Best Copy
+                      </button>
+                      <button class="btn btn-danger btn-sm btn-reject-doc" data-id="${docId}" style="font-size: 12px; padding: 6px 8px; display: inline-flex; align-items: center; justify-content: center;" title="Reject and delete this contribution">
+                        <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i>
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      if (clustersHeader) clustersHeader.style.display = 'none';
+      if (clustersList) clustersList.innerHTML = '';
+    }
+
+    // 4. Render Non-Clustered Individual Pending Items
+    const individualPending = pendingDocs.filter(d => !clusteredDocIds.has(String(d.id)));
+
+    if (activeClusters.length > 0 && singleTitle) {
+      singleTitle.style.display = 'block';
+    } else if (singleTitle) {
+      singleTitle.style.display = 'none';
+    }
+
+    if (individualPending.length === 0 && activeClusters.length > 0) {
+      pendingDocsContainer.innerHTML = '<div style="padding: 16px; color: var(--text-muted); font-size: 13px; text-align: center;">All current pending submissions are grouped in the duplicate clusters above.</div>';
+    } else {
+      pendingDocsContainer.innerHTML = individualPending.map(d => {
+        const displayType = d.type === 'notes' ? 'Notes' : (d.type === 'paper' ? 'PYQ/Paper' : (d.type === 'lab_manual' ? 'Lab Manual' : (d.type === 'book' ? 'Book' : (d.type === 'syllabus' ? 'Syllabus' : (d.type === 'roadmap' ? 'Roadmap' : (d.type === 'competitive' ? 'Competitive Exam PYQ' : d.type))))));
+        const qScore = typeof d.qualityScore === 'number' ? d.qualityScore : null;
+
+        return `
+          <div class="doc-card pending-doc-card" style="margin-bottom: 12px;">
+            <div class="doc-info">
+              <div class="doc-icon-container">
+                <i data-lucide="file-text"></i>
+              </div>
+              <div class="doc-meta">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+                  <h5 style="font-size: 16px; margin: 0; color: var(--primary-dark); font-weight: 700;">${escapeHTML(d.title)}</h5>
+                  ${qScore !== null ? `
+                    <span style="font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: ${qScore >= 75 ? '#dcfce7' : (qScore >= 50 ? '#fef9c3' : '#fee2e2')}; color: ${qScore >= 75 ? '#16a34a' : (qScore >= 50 ? '#ca8a04' : '#dc2626')};">
+                      Score: ${qScore}/100
+                    </span>
+                  ` : ''}
+                </div>
+                <p style="font-size: 13px; color: var(--text-main); margin-bottom: 4px;">
+                  Category: <strong>${escapeHTML(displayType)}</strong> &bull; Subject: <strong>${escapeHTML(d.subject || 'N/A')}</strong>
+                </p>
+                <p style="font-size: 12px; color: var(--text-muted);">
+                  Contributor: <strong>${escapeHTML(d.contributorName)}</strong> (${escapeHTML(d.contributorPhone)}) &bull; Year: ${escapeHTML(d.year || 'N/A')}
+                </p>
+                <p style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                  Submitted: ${new Date(d.createdAt).toLocaleString()}
+                </p>
+              </div>
+            </div>
+            <div class="pending-doc-actions">
+              <a href="${escapeHTML(d.fileUrl)}" target="_blank" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 4px;">
+                <i data-lucide="eye" style="width: 14px; height: 14px;"></i> View File
+              </a>
+              <button class="btn btn-primary btn-sm btn-approve-doc" data-id="${d.id}" style="background-color: var(--success); border: none; display: inline-flex; align-items: center; gap: 4px;">
+                <i data-lucide="check" style="width: 14px; height: 14px;"></i> Accept
+              </button>
+              <button class="btn btn-danger btn-sm btn-reject-doc" data-id="${d.id}" style="display: inline-flex; align-items: center; gap: 4px;">
+                <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i> Delete
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 5. Bind Select Canonical Winner handlers inside cluster cards
+    const clustersContainer = document.getElementById('pending-duplicate-clusters-list');
+    if (clustersContainer) {
+      clustersContainer.querySelectorAll('.btn-select-canonical').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const groupId = btn.getAttribute('data-group-id');
+          const docId = btn.getAttribute('data-doc-id');
+
+          if (!confirm('Approve this document as the canonical published copy? Remaining duplicate copies in this cluster will be marked as resolved duplicates.')) {
+            return;
+          }
+
+          const origHtml = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i>';
+          refreshIcons();
+
+          try {
+            if (groupId && !groupId.startsWith('hash-')) {
+              await api.selectCanonicalPaper(groupId, docId, 'Approved as best quality copy in cluster');
+            } else {
+              // Approve winning document and reject others sharing same hash
+              await api.approveDocument(docId);
+              const card = btn.closest('.duplicate-group-card');
+              if (card) {
+                const otherDeleteBtns = card.querySelectorAll(`.btn-reject-doc:not([data-id="${docId}"])`);
+                for (const dBtn of otherDeleteBtns) {
+                  const otherId = dBtn.getAttribute('data-id');
+                  if (otherId) await api.rejectDocument(otherId).catch(() => {});
+                }
+              }
+            }
+            alert('Canonical copy approved successfully!');
+            await renderPendingContributions();
+          } catch (err) {
+            alert('Failed to approve canonical: ' + (err.message || 'Server error'));
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+            refreshIcons();
+          }
+        });
+      });
+    }
+
+    // 6. Bind Individual Approve handlers
+    document.querySelectorAll('.btn-approve-doc').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const docId = btn.getAttribute('data-id');
+        const originalHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i>';
+        refreshIcons();
+        try {
+          await api.approveDocument(docId);
+          await renderPendingContributions();
+        } catch (err) {
+          alert(err.message || 'Failed to approve resource');
+          btn.disabled = false;
+          btn.innerHTML = originalHTML;
+          refreshIcons();
+        }
+      });
+    });
+
+    // 7. Bind Individual Reject/Delete handlers
+    document.querySelectorAll('.btn-reject-doc').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const docId = btn.getAttribute('data-id');
+        if (!confirm('Are you sure you want to reject and delete this contribution?')) return;
+        const originalHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 14px; height: 14px;"></i>';
+        refreshIcons();
+        try {
+          await api.rejectDocument(docId);
+          await renderPendingContributions();
+        } catch (err) {
+          alert(err.message || 'Failed to reject resource');
+          btn.disabled = false;
+          btn.innerHTML = originalHTML;
+          refreshIcons();
+        }
+      });
+    });
+
+    refreshIcons();
+  } catch (err) {
+    console.error('Error rendering pending contributions:', err);
+    pendingDocsContainer.innerHTML = `<div class="empty-state" style="color: var(--danger);">Failed to load contributions: ${escapeHTML(err.message)}</div>`;
+  }
+}
+
+// Backward compatibility alias for any legacy calls or lingering listeners
+window.renderDuplicatePaperGroups = async function() {
+  if (typeof renderPendingContributions === 'function') {
+    await renderPendingContributions();
+  }
+};
+
+function initContributionEventHandlers() {
+  const floatingBtn = document.getElementById('btn-floating-contribute');
+  const contributeModal = document.getElementById('modal-contribute');
+  const closeBtn = document.getElementById('modal-contribute-close');
+  const cancelBtn = document.getElementById('modal-contribute-cancel');
+  const contributeForm = document.getElementById('form-contribute');
+  const categorySelect = document.getElementById('contribute-category');
+  const subjectSelect = document.getElementById('contribute-subject');
+  const yearSelect = document.getElementById('contribute-doc-year');
+  const tabFile = document.getElementById('tab-contribute-file');
+  const tabLink = document.getElementById('tab-contribute-link');
+  const groupFile = document.getElementById('group-contribute-file');
+  const groupLink = document.getElementById('group-contribute-link');
+  const linkInput = document.getElementById('contribute-link-input');
+  const fileInput = document.getElementById('contribute-file-input');
+  const dragBox = document.getElementById('contribute-drag-box');
+  const fileLabel = document.getElementById('contribute-file-label');
+  const errorAlert = document.getElementById('contribute-error-alert');
+  const successAlert = document.getElementById('contribute-success-alert');
+  const submitBtn = document.getElementById('btn-contribute-submit');
+
+  const closeContribute = () => {
+    if (contributeModal) contributeModal.style.display = 'none';
+  };
+
+  async function populateFoldersForCategory(category, preselectedFolderId = null) {
+    const container = document.getElementById('contribute-folder-container');
+    if (!container) return;
+    
+    container.innerHTML = `<label class="form-label">Target Folder / Subject</label><select id="contribute-subject" class="form-select" disabled><option>Loading folders...</option></select>`;
+
+    if (!category) {
+      container.innerHTML = `<label class="form-label">Target Folder / Subject</label><select id="contribute-subject" class="form-select" disabled><option>Select Category First</option></select>`;
+      return;
+    }
+
+    try {
+      if (category === 'syllabus') {
+        container.innerHTML = `<label class="form-label">Target Folder / Subject</label><select id="contribute-subject" class="form-select"><option value="general" selected>General Syllabus (No Folder Required)</option></select>`;
+        return;
+      }
+
+      const folders = await api.getAllFolders(category);
+      if (!folders || folders.length === 0) {
+        container.innerHTML = `<label class="form-label">Target Folder / Subject</label><select id="contribute-subject" class="form-select"><option value="general" selected>General / Root ${escapeHTML(capitalizeName(category))} (No Subfolder)</option></select>`;
+        return;
+      }
+
+      // Group folders by parentId
+      const childrenMap = new Map();
+      const folderMap = new Map();
+      folders.forEach(f => {
+        folderMap.set(String(f.id), f);
+        const pid = f.parentId ? String(f.parentId) : 'root';
+        if (!childrenMap.has(pid)) childrenMap.set(pid, []);
+        childrenMap.get(pid).push(f);
+      });
+
+      // Clear container for cascading selects
+      container.innerHTML = `<label class="form-label" style="display:block; margin-bottom:8px;">Target Folder / Subject</label><div id="cascading-selects-wrapper" style="display:flex; flex-direction:column; gap:8px;"></div>`;
+      const wrapper = document.getElementById('cascading-selects-wrapper');
+
+      function renderSelectForParent(parentId, depth) {
+        // Remove any existing selects at this depth or deeper
+        const existingSelects = Array.from(wrapper.querySelectorAll('.cascading-folder-select'));
+        existingSelects.forEach(sel => {
+          if (parseInt(sel.getAttribute('data-depth')) >= depth) {
+            sel.remove();
+          }
+        });
+
+        const children = childrenMap.get(parentId) || [];
+        if (children.length === 0) return; // No subfolders, stop here
+
+        // Sort alphabetically
+        children.sort((a, b) => a.name.localeCompare(b.name));
+
+        const select = document.createElement('select');
+        select.className = 'form-select cascading-folder-select';
+        select.setAttribute('data-depth', depth);
+        select.required = true;
+        
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
+        defaultOption.textContent = depth === 0 ? 'Select Top Level Folder...' : 'Select Sub-folder...';
+        select.appendChild(defaultOption);
+
+        children.forEach(child => {
+          const opt = document.createElement('option');
+          opt.value = child.id;
+          opt.textContent = child.name;
+          select.appendChild(opt);
+        });
+
+        select.addEventListener('change', (e) => {
+          const selectedId = e.target.value;
+          renderSelectForParent(selectedId, depth + 1);
+        });
+
+        wrapper.appendChild(select);
+      }
+
+      renderSelectForParent('root', 0);
+
+      // Preselection logic
+      if (preselectedFolderId && folderMap.has(String(preselectedFolderId))) {
+        // Trace path to root
+        let pathIds = [];
+        let curr = folderMap.get(String(preselectedFolderId));
+        while(curr) {
+          pathIds.unshift(String(curr.id));
+          curr = curr.parentId && folderMap.has(String(curr.parentId)) ? folderMap.get(String(curr.parentId)) : null;
+        }
+        
+        // Render step by step
+        for (let i = 0; i < pathIds.length; i++) {
+          const sel = wrapper.querySelector(`.cascading-folder-select[data-depth="${i}"]`);
+          if (sel) {
+            sel.value = pathIds[i];
+            renderSelectForParent(pathIds[i], i + 1);
+          }
+        }
+      }
+
+    } catch (err) {
+      console.error('Failed to load folders for category:', err);
+      container.innerHTML = `<label class="form-label">Target Folder / Subject</label><select id="contribute-subject" class="form-select" disabled><option>Error loading folders</option></select>`;
+    }
+  }
+  function openContributeModal(targetCategory = null, targetFolderId = null) {
+    if (!contributeModal) return;
+    contributeModal.style.display = 'flex';
+    if (errorAlert) errorAlert.style.display = 'none';
+    if (successAlert) successAlert.style.display = 'none';
+    if (contributeForm) contributeForm.reset();
+
+    // Populate contributor name
+    const contributorNameInput = document.getElementById('contribute-user-name');
+    if (contributorNameInput && currentUser) {
+      contributorNameInput.value = currentUser.name;
+    }
+
+    // Populate academic years
+    if (yearSelect) {
+      const years = getAcademicYears();
+      yearSelect.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+    }
+
+    // Reset tab states
+    contributeSourceMode = 'file';
+    if (tabFile) tabFile.classList.add('active');
+    if (tabLink) tabLink.classList.remove('active');
+    if (groupFile) groupFile.style.display = 'block';
+    if (groupLink) groupLink.style.display = 'none';
+    if (fileLabel) fileLabel.textContent = 'Click to browse files';
+
+    // Auto-detect current active view and folder context if not explicitly provided
+    let autoCat = targetCategory;
+    let autoFolderId = targetFolderId;
+    if (!autoCat) {
+      const notesCurrent = getCurrentNotesFolder();
+      const papersCurrent = getCurrentPapersFolder();
+      if (notesCurrent) {
+        autoCat = 'notes';
+        autoFolderId = notesCurrent.id;
+      } else if (papersCurrent) {
+        autoCat = 'papers';
+        autoFolderId = papersCurrent.id;
+      } else if (currentResourcesFolder) {
+        if (currentResourcesSection.startsWith('lab_manuals')) autoCat = 'lab_manuals';
+        else if (currentResourcesSection.startsWith('books')) autoCat = 'books';
+        else if (currentResourcesSection.startsWith('simulations') || currentResourcesSection.startsWith('roadmaps')) autoCat = 'simulations';
+        else if (currentResourcesSection.startsWith('competitive')) autoCat = 'competitive';
+        autoFolderId = currentResourcesFolder.id;
+      } else if (currentResourcesSection === 'syllabus') {
+        autoCat = 'syllabus';
+      }
+    }
+
+
+    if (autoCat && categorySelect) {
+      categorySelect.value = autoCat;
+      populateFoldersForCategory(autoCat, autoFolderId);
+    } else if (subjectSelect) {
+      subjectSelect.disabled = true;
+      subjectSelect.innerHTML = '<option value="" disabled selected>Select Target Folder</option>';
+    }
+
+    refreshIcons();
+  }
+
+  window.openContributeModal = openContributeModal;
+
+  // Removed custom PDF.js rendering and zoom code in favor of native iframe viewer
+
+  const fullscreenBtn = document.getElementById('modal-doc-viewer-fullscreen');
+  if (fullscreenBtn) {
+    fullscreenBtn.addEventListener('click', () => {
+      const viewer = document.getElementById('doc-viewer-modal-content');
+      if (!document.fullscreenElement) {
+        viewer.requestFullscreen().catch(err => {
+          console.log(`Error attempting to enable fullscreen: ${err.message}`);
+        });
+      } else {
+        document.exitFullscreen();
+      }
+    });
+  }
+
+  let pdfDoc = null,
+      pdfScale = 1.2,
+      pageRenderingCache = new Set(),
+      pageObserver = null,
+      pageVisibilityObserver = null,
+      currentCssScale = 1;
+
+  function renderAllPages() {
+    const container = document.getElementById('pdf-viewer-container');
+    const scrollRoot = document.getElementById('doc-viewer-body');
+    const totalPagesEl = document.getElementById('pdf-total-pages');
+    
+    container.innerHTML = '';
+    pageRenderingCache.clear();
+    if (pageObserver) pageObserver.disconnect();
+    if (pageVisibilityObserver) pageVisibilityObserver.disconnect();
+    
+    if (totalPagesEl) totalPagesEl.textContent = pdfDoc.numPages;
+
+    pageObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const canvas = entry.target;
+          const pageNum = parseInt(canvas.dataset.pageNum);
+          
+          if (!pageRenderingCache.has(pageNum)) {
+            pageRenderingCache.add(pageNum);
+            pdfDoc.getPage(pageNum).then(function(page) {
+              const ctx = canvas.getContext('2d');
+              const viewport = page.getViewport({ scale: pdfScale });
+              canvas.height = viewport.height;
+              canvas.width = viewport.width;
+              
+              const renderContext = {
+                canvasContext: ctx,
+                viewport: viewport
+              };
+              page.render(renderContext);
+            });
+          }
+        }
+      });
+    }, { root: scrollRoot, rootMargin: '800px 0px' });
+    
+    pageVisibilityObserver = new IntersectionObserver((entries) => {
+      let maxRatio = 0;
+      let visiblePage = parseInt(document.getElementById('pdf-current-page')?.textContent || '1');
+      entries.forEach(entry => {
+        if (entry.isIntersecting && entry.intersectionRatio > maxRatio) {
+          maxRatio = entry.intersectionRatio;
+          visiblePage = parseInt(entry.target.dataset.pageNum);
+        }
+      });
+      if (maxRatio > 0) {
+        const currentPageEl = document.getElementById('pdf-current-page');
+        if (currentPageEl) currentPageEl.textContent = visiblePage;
+      }
+    }, { root: scrollRoot, threshold: [0.1, 0.5, 0.9] });
+    
+    // Get first page to estimate dimensions for placeholders
+    pdfDoc.getPage(1).then(function(firstPage) {
+      const viewport = firstPage.getViewport({ scale: pdfScale });
+      const estHeight = viewport.height;
+      const estWidth = viewport.width;
+      
+      for (let num = 1; num <= pdfDoc.numPages; num++) {
+        const canvas = document.createElement('canvas');
+        canvas.dataset.pageNum = num;
+        canvas.style.maxWidth = '100%';
+        canvas.style.boxShadow = '0 8px 16px rgba(0,0,0,0.6)';
+        canvas.style.background = '#fff';
+        canvas.style.borderRadius = '4px';
+        canvas.width = estWidth;
+        canvas.height = estHeight;
+        
+        container.appendChild(canvas);
+        pageObserver.observe(canvas);
+        pageVisibilityObserver.observe(canvas);
+      }
+    });
+  }
+
+  function loadPdfIntoViewer(url, fileName) {
+    const modal = document.getElementById('modal-doc-viewer');
+    const title = document.getElementById('doc-viewer-title');
+    const closeBtn = document.getElementById('modal-doc-viewer-close');
+    const loading = document.getElementById('pdf-loading-indicator');
+    const container = document.getElementById('pdf-viewer-container');
+    const customToolbar = document.getElementById('pdf-custom-toolbar');
+    
+    if (modal && title) {
+      title.textContent = fileName || 'Document Viewer';
+      modal.style.display = 'flex';
+      loading.style.display = 'block';
+      if (customToolbar) customToolbar.style.display = 'none';
+      container.innerHTML = '';
+      currentCssScale = 1;
+      container.style.transform = `scale(1)`;
+      
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+      
+      fetch(url).then(async (res) => {
+        if (!res.ok) {
+          let errText = await res.text();
+          try { errText = JSON.parse(errText).message; } catch(e){}
+          throw new Error(`Backend Error (${res.status}): ${errText}`);
+        }
+        return res.arrayBuffer();
+      }).then(arrayBuffer => {
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        return loadingTask.promise;
+      }).then(function(pdfDoc_) {
+        pdfDoc = pdfDoc_;
+        loading.style.display = 'none';
+        if (customToolbar) customToolbar.style.display = 'flex';
+        
+        pdfScale = window.innerWidth < 768 ? 1.0 : 1.8;
+        renderAllPages();
+      }).catch(function(reason) {
+        console.error(reason);
+        loading.style.display = 'block';
+        loading.textContent = reason.message || 'Error loading PDF';
+      });
+      
+      const closeModal = () => {
+        modal.style.display = 'none';
+        if (customToolbar) customToolbar.style.display = 'none';
+        if (document.fullscreenElement) document.exitFullscreen();
+        if (closeBtn) closeBtn.removeEventListener('click', closeModal);
+      };
+      if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    }
+  }
+
+  function applyPdfZoom() {
+    const container = document.getElementById('pdf-viewer-container');
+    const docViewerBody = document.getElementById('doc-viewer-body');
+    if (!container) return;
+    
+    container.style.transform = 'none';
+    container.style.width = `${currentCssScale * 100}%`;
+    
+    // Ensure canvases scale up with the container properly
+    const canvases = container.querySelectorAll('canvas');
+    canvases.forEach(c => {
+      c.style.maxWidth = '100%';
+      c.style.width = '100%';
+      c.style.height = 'auto';
+    });
+
+    // If zoomed in, prevent center alignment clipping by aligning to start
+    if (currentCssScale > 1) {
+      if (docViewerBody) docViewerBody.style.alignItems = 'flex-start';
+      container.style.margin = '0 auto';
+    } else {
+      if (docViewerBody) docViewerBody.style.alignItems = 'center';
+      container.style.margin = '0';
+    }
+  }
+
+  // Zoom controls setup
+  const zoomInBtn = document.getElementById('pdf-zoom-in');
+  const zoomOutBtn = document.getElementById('pdf-zoom-out');
+  const zoomResetBtn = document.getElementById('pdf-zoom-reset');
+  const docViewerBody = document.getElementById('doc-viewer-body');
+  
+  if (zoomInBtn) {
+    zoomInBtn.addEventListener('click', () => {
+      currentCssScale = Math.min(4, currentCssScale + 0.25);
+      applyPdfZoom();
+    });
+  }
+  
+  if (zoomOutBtn) {
+    zoomOutBtn.addEventListener('click', () => {
+      currentCssScale = Math.max(0.5, currentCssScale - 0.25);
+      applyPdfZoom();
+    });
+  }
+  
+  if (zoomResetBtn) {
+    zoomResetBtn.addEventListener('click', () => {
+      currentCssScale = 1;
+      applyPdfZoom();
+    });
+  }
+  
+  if (docViewerBody) {
+    docViewerBody.addEventListener('wheel', (e) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        if (e.deltaY < 0) {
+          currentCssScale = Math.min(4, currentCssScale + 0.1);
+        } else {
+          currentCssScale = Math.max(0.5, currentCssScale - 0.1);
+        }
+        applyPdfZoom();
+      }
+    }, { passive: false });
+  }
+
+  // --- DONATION POPUP LOGIC ---
+  let skipDonationUntilReload = false;
+  try {
+    sessionStorage.removeItem('skipDonation');
+  } catch (e) {}
+
+  let donationContinueCallback = null;
+
+  function updateDonationUI(amount) {
+    const userName = (currentUser && currentUser.name) ? currentUser.name : 'User';
+    const note = `Donation from ${userName}`;
+    const upiString = `upi://pay?pa=ankitgtyl@fam&pn=StudyMyte&am=${amount}&tn=${encodeURIComponent(note)}&cu=INR`;
+    
+    const donationQr = document.getElementById('donation-qr');
+    const donationUpiLink = document.getElementById('donation-upi-link');
+    if (donationQr) {
+      donationQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiString)}`;
+    }
+    if (donationUpiLink) {
+      donationUpiLink.href = upiString;
+    }
+  }
+
+  window.updateDonationUI = updateDonationUI;
+
+  function openDonationModal(callback = null) {
+    const donationModal = document.getElementById('modal-donation');
+    if (!donationModal) {
+      if (typeof callback === 'function') callback();
+      return;
+    }
+
+    donationContinueCallback = callback;
+    const donationAmtBtns = document.querySelectorAll('.donation-amt-btn');
+    const donationDoNotShowCb = document.getElementById('donation-do-not-show');
+
+    donationAmtBtns.forEach(b => {
+      b.classList.remove('btn-primary', 'active');
+      b.classList.add('btn-secondary');
+      if (b.dataset.amt === '10') {
+        b.classList.remove('btn-secondary');
+        b.classList.add('btn-primary', 'active');
+      }
+    });
+
+    updateDonationUI('10');
+    if (donationDoNotShowCb) donationDoNotShowCb.checked = false;
+
+    donationModal.style.display = 'flex';
+    if (typeof refreshIcons === 'function') refreshIcons();
+    else if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  window.openDonationModal = openDonationModal;
+
+  function closeDonationModal(executeCallback = true) {
+    const donationModal = document.getElementById('modal-donation');
+    const donationDoNotShowCb = document.getElementById('donation-do-not-show');
+
+    if (donationDoNotShowCb && donationDoNotShowCb.checked) {
+      skipDonationUntilReload = true;
+    }
+
+    if (donationModal) {
+      donationModal.style.display = 'none';
+    }
+
+    if (executeCallback && typeof donationContinueCallback === 'function') {
+      const cb = donationContinueCallback;
+      donationContinueCallback = null;
+      cb();
+    } else {
+      donationContinueCallback = null;
+    }
+  }
+
+  window.closeDonationModal = closeDonationModal;
+
+
+  function interceptWithDonationPopup(callback) {
+    if (skipDonationUntilReload) {
+      if (typeof callback === 'function') callback();
+      return;
+    }
+
+    openDonationModal(callback);
+  }
+
+  window.interceptWithDonationPopup = interceptWithDonationPopup;
+
+  const donationModal = document.getElementById('modal-donation');
+  const btnContinueWithoutDonation = document.getElementById('btn-continue-without-donation');
+  const closeDonationBtn = document.getElementById('modal-donation-close');
+  const donationAmtBtns = document.querySelectorAll('.donation-amt-btn');
+
+  if (donationModal) {
+    donationAmtBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        donationAmtBtns.forEach(b => {
+          b.classList.remove('btn-primary', 'active');
+          b.classList.add('btn-secondary');
+        });
+        const clicked = e.currentTarget;
+        clicked.classList.remove('btn-secondary');
+        clicked.classList.add('btn-primary', 'active');
+        updateDonationUI(clicked.dataset.amt);
+      });
+    });
+
+    if (btnContinueWithoutDonation) {
+      btnContinueWithoutDonation.addEventListener('click', () => {
+        closeDonationModal(true);
+      });
+    }
+
+    if (closeDonationBtn) {
+      closeDonationBtn.addEventListener('click', () => {
+        closeDonationModal(true);
+      });
+    }
+
+    donationModal.addEventListener('click', (e) => {
+      if (e.target === donationModal) {
+        closeDonationModal(true);
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && donationModal.style.display !== 'none') {
+        closeDonationModal(true);
+      }
+    });
+  }
+
+  window.openDocumentViewer = function(docId, fileName, docType) {
+    interceptWithDonationPopup(() => {
+      const url = `${API_BASE}/documents/download/${docId}?token=${localStorage.getItem('token')}`;
+      if (docType === 'competitive') {
+        window.open(url, '_blank');
+        return;
+      }
+      loadPdfIntoViewer(url, fileName);
+    });
+  };
+
+  window.openBlobViewer = function(blobUrl, fileName) {
+    interceptWithDonationPopup(() => {
+      loadPdfIntoViewer(blobUrl, fileName);
+    });
+  };
+
+
+  if (floatingBtn) {
+    floatingBtn.addEventListener('click', () => {
+      openContributeModal();
+    });
+  }
+
+  if (closeBtn) closeBtn.addEventListener('click', closeContribute);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeContribute);
+
+  if (categorySelect && subjectSelect) {
+    categorySelect.addEventListener('change', () => {
+      populateFoldersForCategory(categorySelect.value);
+    });
+  }
+
+  let contributeSourceMode = 'file';
+  if (tabFile && tabLink) {
+    tabFile.addEventListener('click', () => {
+      contributeSourceMode = 'file';
+      tabFile.classList.add('active');
+      tabLink.classList.remove('active');
+      if (groupFile) groupFile.style.display = 'block';
+      if (groupLink) groupLink.style.display = 'none';
+      if (errorAlert) errorAlert.style.display = 'none';
+    });
+    tabLink.addEventListener('click', () => {
+      contributeSourceMode = 'link';
+      tabFile.classList.remove('active');
+      tabLink.classList.add('active');
+      if (groupFile) groupFile.style.display = 'none';
+      if (groupLink) groupLink.style.display = 'block';
+      if (errorAlert) errorAlert.style.display = 'none';
+    });
+  }
+
+  if (dragBox && fileInput) {
+    dragBox.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        fileLabel.textContent = file.name;
+      } else {
+        fileLabel.textContent = 'Click to browse files';
+      }
+    });
+  }
+
+  if (contributeForm) {
+    contributeForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (errorAlert) errorAlert.style.display = 'none';
+      if (successAlert) successAlert.style.display = 'none';
+
+      const title = document.getElementById('contribute-doc-title').value.trim();
+      const category = categorySelect.value;
+      const year = yearSelect.value;
+      
+      let folderId = '';
+      let folderText = '';
+      const cascadingSelects = Array.from(document.querySelectorAll('.cascading-folder-select'));
+      if (cascadingSelects.length > 0) {
+        // Find the deepest one with a valid value
+        const validSelects = cascadingSelects.filter(sel => sel.value && sel.value !== '');
+        if (validSelects.length > 0) {
+          const targetSelect = validSelects[validSelects.length - 1];
+          folderId = targetSelect.value;
+          folderText = targetSelect.options[targetSelect.selectedIndex].text;
+        }
+      } else {
+        const fallbackSelect = document.getElementById('contribute-subject');
+        if (fallbackSelect) {
+          folderId = fallbackSelect.value;
+          if (fallbackSelect.selectedIndex >= 0) folderText = fallbackSelect.options[fallbackSelect.selectedIndex].text;
+        }
+      }
+      
+      if (!title || !category || !folderId) {
+        if (errorAlert) {
+          errorAlert.textContent = 'All fields (Title, Category, Subject) are required.';
+          errorAlert.style.display = 'block';
+        }
+        return;
+      }
+
+      let docType = 'notes';
+      if (category === 'papers') docType = 'paper';
+      else if (category === 'lab_manuals') docType = 'lab_manual';
+      else if (category === 'books') docType = 'book';
+      else if (category === 'simulations' || category === 'roadmaps') docType = 'simulation';
+      else if (category === 'competitive') docType = 'competitive';
+      else if (category === 'syllabus') docType = 'syllabus';
+
+      const subject = (folderId !== 'general' && folderText)
+        ? folderText
+        : (categorySelect.options[categorySelect.selectedIndex] ? categorySelect.options[categorySelect.selectedIndex].text : category);
+
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Uploading...';
+      }
+
+      try {
+        if (contributeSourceMode === 'file') {
+          const file = fileInput.files[0];
+          if (!file) {
+            throw new Error('Please select a PDF file to upload');
+          }
+          if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+            throw new Error('Only PDF files are allowed');
+          }
+          if (file.size > 10485760) {
+            throw new Error('File size exceeds the 10 MB limit.');
+          }
+
+          const formData = new FormData();
+          formData.append('pdf', file);
+          formData.append('title', title);
+          formData.append('type', docType);
+          formData.append('folderId', folderId);
+          formData.append('subject', subject);
+          formData.append('year', year);
+
+          await api.contributeDocument(formData);
+        } else {
+          const link = linkInput.value.trim();
+          if (!link) {
+            throw new Error('Please enter a document URL');
+          }
+          if (!link.startsWith('http://') && !link.startsWith('https://')) {
+            throw new Error('Please enter a valid URL starting with http:// or https://');
+          }
+
+          const formData = new FormData();
+          formData.append('title', title);
+          formData.append('type', docType);
+          formData.append('folderId', folderId);
+          formData.append('subject', subject);
+          formData.append('year', year);
+          formData.append('fileUrl', link);
+          formData.append('fileName', 'Link Resource');
+
+          await api.contributeDocument(formData);
+        }
+
+        if (successAlert) {
+          successAlert.textContent = 'Thank you! Your resource has been submitted and is pending admin approval.';
+          successAlert.style.display = 'block';
+        }
+        
+        contributeForm.reset();
+        if (fileLabel) fileLabel.textContent = 'Click to browse files';
+        if (subjectSelect) {
+          subjectSelect.disabled = true;
+          subjectSelect.innerHTML = '<option value="" disabled selected>Select Subject Folder</option>';
+        }
+
+        setTimeout(() => {
+          closeContribute();
+        }, 2500);
+
+      } catch (err) {
+        if (errorAlert) {
+          if (err.data && err.data.code === 'DUPLICATE_PUBLISHED') {
+            const existing = err.data.existingDocument;
+            const existingUrl = existing ? escapeHTML(existing.fileUrl) : '#';
+            const existingTitle = existing ? escapeHTML(existing.title) : 'Published Paper';
+            errorAlert.innerHTML = `
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; align-items: center; gap: 6px; font-weight: 700;">
+                  <i data-lucide="info" style="width: 16px; height: 16px;"></i>
+                  <span>Paper Already Published!</span>
+                </div>
+                <div>An identical or matching question paper is already approved and live in StudyMyte.</div>
+                ${existing ? `
+                  <div style="margin-top: 4px;">
+                    <a href="${existingUrl}" target="_blank" style="text-decoration: underline; font-weight: 600; color: inherit;">
+                      View Published Paper: "${existingTitle}" &rarr;
+                    </a>
+                  </div>
+                ` : ''}
+              </div>
+            `;
+            refreshIcons();
+          } else {
+            errorAlert.textContent = err.message || 'Failed to submit contribution';
+          }
+          errorAlert.style.display = 'block';
+        }
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Upload';
+        }
+      }
+    });
+  }
+}
+
+async function renderMyContributionsView() {
+  const container = document.getElementById('view-my-contributions');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="folder-page-header">
+      <div class="folder-breadcrumbs">
+        <span class="breadcrumb-active" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="award" style="color: var(--primary); width: 22px; height: 22px;"></i> 
+          My Contribution Dashboard
+        </span>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 24px;">
+      <p style="color: var(--text-muted); font-size: 15px; margin: 0;">
+        Track your contributed files, approval status, and likes received from other students.
+      </p>
+    </div>
+
+    <!-- Analytics Stats Cards -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 40px;">
+      <div class="card" style="padding: 24px; text-align: center; border-left: 4px solid var(--success);">
+        <div style="color: var(--text-muted); font-size: 13px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px;">Accepted Contributions</div>
+        <div id="stats-contributions-accepted" style="font-size: 36px; font-weight: 800; color: var(--success);">0</div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Files approved by Admin</p>
+      </div>
+      <div class="card" style="padding: 24px; text-align: center; border-left: 4px solid var(--primary);">
+        <div style="color: var(--text-muted); font-size: 13px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px;">Total Likes Received</div>
+        <div id="stats-contributions-likes" style="font-size: 36px; font-weight: 800; color: var(--primary-dark);">0</div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Likes on your approved resources</p>
+      </div>
+    </div>
+
+    <!-- Contributed Files list -->
+    <div style="border-top: 1px solid var(--border-color); padding-top: 30px;">
+      <h3 class="section-title" style="margin-bottom: 16px; font-size: 20px;">
+        <i data-lucide="file-text" style="color: var(--primary); width: 22px; height: 22px;"></i>
+        Your Contribution Submissions
+      </h3>
+      <div id="student-contributions-list" class="docs-list">
+        ${getListSkeleton()}
+      </div>
+    </div>
+  `;
+
+  refreshIcons();
+
+  const acceptedEl = document.getElementById('stats-contributions-accepted');
+  const likesEl = document.getElementById('stats-contributions-likes');
+  const listEl = document.getElementById('student-contributions-list');
+
+  try {
+    const response = await request('/documents/my-contributions');
+    const contributions = response || [];
+
+    const acceptedFiles = contributions.filter(c => c.status === 'approved');
+    const totalAccepted = acceptedFiles.length;
+    let totalLikes = 0;
+    acceptedFiles.forEach(f => {
+      totalLikes += f.likesCount || 0;
+    });
+
+    if (acceptedEl) acceptedEl.textContent = totalAccepted;
+    if (likesEl) likesEl.textContent = totalLikes;
+
+    if (contributions.length === 0) {
+      if (listEl) listEl.innerHTML = '<div class="empty-state">You haven\'t contributed any resources yet. Use the "+" button to start contributing!</div>';
+    } else {
+      if (listEl) {
+        listEl.innerHTML = contributions.map(c => {
+          const displayType = c.type === 'notes' ? 'Notes' : (c.type === 'paper' ? 'PYQ/Paper' : (c.type === 'lab_manual' ? 'Lab Manual' : (c.type === 'book' ? 'Book' : (c.type === 'syllabus' ? 'Syllabus' : (c.type === 'roadmap' ? 'Roadmap' : (c.type === 'competitive' ? 'Competitive Exam PYQ' : c.type))))));
+          
+          let statusBadge = '';
+          if (c.status === 'pending') {
+            statusBadge = `<span style="font-size: 11px; font-weight: 700; background-color: #fef3c7; color: #b45309; padding: 4px 10px; border-radius: 12px; border: 1px solid #fde68a;">Pending Approval</span>`;
+          } else {
+            statusBadge = `<span style="font-size: 11px; font-weight: 700; background-color: #dcfce7; color: #15803d; padding: 4px 10px; border-radius: 12px; border: 1px solid #86efac;">Approved & Live</span>`;
+          }
+
+          return `
+            <div class="doc-card" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+              <div class="doc-info">
+                <div class="doc-icon-container" style="background-color: ${c.status === 'pending' ? '#fffbeb' : '#f0fdf4'}; color: ${c.status === 'pending' ? '#d97706' : '#16a34a'};">
+                  <i data-lucide="file-text"></i>
+                </div>
+                <div class="doc-meta">
+                  <h5 style="font-size: 15px; font-weight: 700; color: var(--primary-dark); margin: 0 0 4px 0;">${escapeHTML(c.title)}</h5>
+                  <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 4px 0;">
+                    Category: <strong>${escapeHTML(displayType)}</strong> &bull; Subject: <strong>${escapeHTML(c.subject || 'N/A')}</strong>
+                  </p>
+                  <p style="font-size: 11px; color: var(--text-muted); margin: 0;">
+                    Submitted: ${new Date(c.createdAt).toLocaleDateString()} &bull; Likes: ${c.likesCount}
+                  </p>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                ${statusBadge}
+                ${c.status === 'approved' ? `
+                  <a href="${escapeHTML(c.fileUrl)}" target="_blank" class="btn btn-secondary btn-sm" style="padding: 6px 12px;"><i data-lucide="eye" style="width:14px;height:14px;"></i> View</a>
+                ` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+    refreshIcons();
+  } catch (err) {
+    console.error('Error fetching student contributions stats:', err);
+    if (listEl) listEl.innerHTML = `<div class="empty-state" style="color: var(--danger);">Failed to load contributions details: ${escapeHTML(err.message)}</div>`;
+  }
+}
+
+
+
+/* --- THEME MODE CONTROLLER (LIGHT / DARK) --- */
+function initThemeModeToggle() {
+  const currentTheme = localStorage.getItem('studymyte-theme-mode') || 'light';
+  syncThemeCheckboxes(currentTheme === 'dark');
+
+  const toggles = document.querySelectorAll('#theme-mode-toggle, #theme-mode-toggle-mobile, #theme-mode-toggle-appearance');
+  toggles.forEach(toggle => {
+    toggle.onchange = (e) => {
+      const isDark = e.target.checked;
+      setThemeMode(isDark ? 'dark' : 'light', true);
+    };
+  });
+}
+
+function syncThemeCheckboxes(isDark) {
+  const toggles = document.querySelectorAll('#theme-mode-toggle, #theme-mode-toggle-mobile, #theme-mode-toggle-appearance');
+  toggles.forEach(t => {
+    t.checked = isDark;
+  });
+
+  // Highlight active labels in top switcher bar
+  const lightLabels = document.querySelectorAll('.ui-toggle-label.light-label');
+  const darkLabels = document.querySelectorAll('.ui-toggle-label.dark-label');
+  lightLabels.forEach(l => {
+    l.style.color = !isDark ? 'var(--primary)' : 'var(--text-muted)';
+    l.style.fontWeight = !isDark ? '700' : '500';
+  });
+  darkLabels.forEach(d => {
+    d.style.color = isDark ? '#93c5fd' : 'var(--text-muted)';
+    d.style.fontWeight = isDark ? '700' : '500';
+  });
+}
+
+function setThemeMode(mode, animate = true) {
+  const isDark = (mode === 'dark');
+  localStorage.setItem('studymyte-theme-mode', isDark ? 'dark' : 'light');
+
+  syncThemeCheckboxes(isDark);
+
+  const applyMode = () => {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    if (document.body) {
+      document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    }
+    const root = document.documentElement;
+    root.style.removeProperty('--primary');
+    root.style.removeProperty('--primary-dark');
+    root.style.removeProperty('--primary-light');
+    root.style.removeProperty('--primary-accent');
+    root.style.removeProperty('--primary-rgb');
+    root.style.removeProperty('--primary-glow');
+    if (isDark) {
+      root.style.setProperty('--bg-gradient', 'radial-gradient(ellipse at 50% -10%, #10214a 0%, #0a142c 45%, #040711 100%)');
+    } else {
+      root.style.setProperty('--bg-gradient', 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)');
+    }
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+    
+    // Switch logos based on theme
+    const logos = document.querySelectorAll('.logo-image');
+    logos.forEach(logo => {
+      logo.src = isDark ? '/logodrk.png' : '/logowht.png';
+    });
+  };
+
+  if (!animate) {
+    applyMode();
+    if (typeof refreshIcons === 'function') refreshIcons();
+    return;
+  }
+
+  const overlay = document.getElementById('theme-transition-overlay');
+  if (overlay) {
+    overlay.style.opacity = '0.7';
+    overlay.style.pointerEvents = 'all';
+  }
+
+  requestAnimationFrame(() => {
+    applyMode();
+    setTimeout(() => {
+      if (overlay) {
+        overlay.style.opacity = '0';
+        overlay.style.pointerEvents = 'none';
+      }
+    }, 120);
+  });
+}
+
+
+
+async function renderAboutView() {
+  const vAbout = document.getElementById('view-about');
+  if(vAbout) vAbout.style.display = 'block';
+
+  const isSuperadmin = currentUser && currentUser.role === 'superadmin';
+  const mgmtDiv = document.getElementById('about-team-management');
+  if (mgmtDiv) {
+    mgmtDiv.style.display = isSuperadmin ? 'block' : 'none';
+  }
+
+  const teamGrid = document.getElementById('about-team-grid');
+  if(!teamGrid) return;
+  teamGrid.innerHTML = '<div style="text-align: center; color: var(--text-muted); width: 100%;">Loading team...</div>';
+  
+  try {
+    const res = await request('/team');
+    if(res.length === 0) {
+      teamGrid.innerHTML = '<div style="text-align: center; color: var(--text-muted); width: 100%;">No team members added yet.</div>';
+      return;
+    }
+    
+    // Make members globally available for editing
+    window.teamMembersData = res;
+
+    teamGrid.innerHTML = res.map(member => {
+      // Use the provided user profile avatar image as fallback
+      const defaultImg = 'https://static.vecteezy.com/system/resources/thumbnails/035/857/753/small_2x/people-face-avatar-icon-cartoon-character-png.png';
+      const img = member.imageUrl ? member.imageUrl : defaultImg;
+      
+      let adminControls = '';
+      if (isSuperadmin) {
+        adminControls = `
+          <div style="margin-top: 16px; display: flex; gap: 8px; justify-content: center; width: 100%;">
+            <button class="btn btn-secondary btn-sm" onclick="editTeamMember('${member._id}')" style="flex: 1; padding: 6px;">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteTeamMember('${member._id}')" style="flex: 1; padding: 6px;">Delete</button>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="team-card card" style="padding: 24px; border-radius: 12px; text-align: center; display: flex; flex-direction: column; align-items: center; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+          <div style="width: 80px; height: 80px; border-radius: 50%; border: 2px solid var(--primary); margin-bottom: 16px; display: flex; align-items: center; justify-content: center; overflow: hidden; background-color: var(--bg-color);">
+            <img src="${img}" alt="${escapeHTML(member.name)}" style="width: 100%; height: 100%; object-fit: cover;">
+          </div>
+          <h4 style="color: var(--primary); font-size: 16px; margin: 0 0 6px 0; font-weight: 700;">${escapeHTML(member.name)}</h4>
+          <p style="color: var(--text-muted); font-size: 13px; margin: 0 0 10px 0; font-style: italic;">${escapeHTML(member.role)}</p>
+          <p style="color: var(--text-color); font-size: 12px; margin: 0; line-height: 1.5; opacity: 0.8;">${escapeHTML(member.bio || '')}</p>
+          ${adminControls}
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    teamGrid.innerHTML = '<div style="color: var(--danger); text-align: center; width: 100%;">Failed to load team</div>';
+  }
+}
+
+// Admin Team Logic
+// Admin Team Logic
+let editingTeamId = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btnAddTeam = document.getElementById('btn-admin-add-team');
+  const btnCancelEdit = document.getElementById('btn-admin-cancel-edit-team');
+  
+  if(btnAddTeam) {
+    btnAddTeam.addEventListener('click', async () => {
+      const name = document.getElementById('admin-team-name').value;
+      const role = document.getElementById('admin-team-role').value;
+      const imageUrl = document.getElementById('admin-team-image').value;
+      const bio = document.getElementById('admin-team-bio').value;
+      const order = document.getElementById('admin-team-order').value;
+      
+      if(!name || !role) return alert('Name and role are required');
+      
+      try {
+        const method = editingTeamId ? 'PUT' : 'POST';
+        const endpoint = editingTeamId ? `/team/${editingTeamId}` : '/team';
+        
+        await request(endpoint, {
+          method,
+          body: { name, role, imageUrl, bio, order }
+        });
+        
+        alert(`Team member ${editingTeamId ? 'updated' : 'added'} successfully!`);
+        
+        // Reset form
+        document.getElementById('admin-team-name').value = '';
+        document.getElementById('admin-team-role').value = '';
+        document.getElementById('admin-team-image').value = '';
+        document.getElementById('admin-team-bio').value = '';
+        document.getElementById('admin-team-order').value = '';
+        editingTeamId = null;
+        btnAddTeam.textContent = 'Add Member';
+        if (btnCancelEdit) btnCancelEdit.style.display = 'none';
+        
+        renderAboutView();
+      } catch(e) {
+        alert('Failed to save team member: ' + e.message);
+      }
+    });
+  }
+
+  if (btnCancelEdit) {
+    btnCancelEdit.addEventListener('click', () => {
+      document.getElementById('admin-team-name').value = '';
+      document.getElementById('admin-team-role').value = '';
+      document.getElementById('admin-team-image').value = '';
+      document.getElementById('admin-team-bio').value = '';
+      document.getElementById('admin-team-order').value = '';
+      editingTeamId = null;
+      btnAddTeam.textContent = 'Add Member';
+      btnCancelEdit.style.display = 'none';
+    });
+  }
+});
+
+window.editTeamMember = function(id) {
+  const member = window.teamMembersData.find(m => m._id === id);
+  if (!member) return;
+  
+  document.getElementById('admin-team-name').value = member.name || '';
+  document.getElementById('admin-team-role').value = member.role || '';
+  document.getElementById('admin-team-image').value = member.imageUrl || '';
+  document.getElementById('admin-team-bio').value = member.bio || '';
+  document.getElementById('admin-team-order').value = member.order || '';
+  
+  editingTeamId = id;
+  const btnAddTeam = document.getElementById('btn-admin-add-team');
+  const btnCancelEdit = document.getElementById('btn-admin-cancel-edit-team');
+  
+  if (btnAddTeam) btnAddTeam.textContent = 'Save Changes';
+  if (btnCancelEdit) btnCancelEdit.style.display = 'inline-block';
+  
+  // Scroll to form
+  const mgmtDiv = document.getElementById('about-team-management');
+  if (mgmtDiv) mgmtDiv.scrollIntoView({ behavior: 'smooth' });
+}
+
+window.deleteTeamMember = async function(id) {
+  if(!confirm('Delete member?')) return;
+  try {
+    await request('/team/' + id, { method: 'DELETE' });
+    renderAboutView();
+  } catch(e) {
+    alert(e.message);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const pdfSearchBtn = document.getElementById('pdf-search-btn');
+  if (pdfSearchBtn) {
+    pdfSearchBtn.addEventListener('click', () => {
+      alert('Text Search is disabled to prevent text extraction and ensure document security.');
+    });
+  }
+
+  const screenshotWarning = document.getElementById('screenshot-warning');
+  const pdfContainer = document.getElementById('pdf-viewer-container');
+  const modalDocViewer = document.getElementById('modal-doc-viewer');
+
+  function handleBlur() {
+    if (modalDocViewer && modalDocViewer.style.display === 'flex') {
+      if (screenshotWarning) screenshotWarning.style.display = 'flex';
+      if (pdfContainer) pdfContainer.style.opacity = '0';
+    }
+  }
+
+  function handleFocus() {
+    if (screenshotWarning) screenshotWarning.style.display = 'none';
+    if (pdfContainer) pdfContainer.style.opacity = '1';
+  }
+
+  function handleVisibilityChange() {
+    if (document.hidden || document.visibilityState !== 'visible') {
+      handleBlur();
+    } else {
+      handleFocus();
+    }
+  }
+
+  function handleKeydown(e) {
+    if (modalDocViewer && modalDocViewer.style.display === 'flex') {
+      if (e.key === 'PrintScreen' || (e.ctrlKey && e.key === 'p') || (e.metaKey && e.shiftKey && e.key === 's') || (e.key === 's' && (e.ctrlKey || e.metaKey))) {
+        e.preventDefault();
+        try { navigator.clipboard.writeText('Screenshots disabled.'); } catch(err){}
+        handleBlur();
+        setTimeout(handleFocus, 3000);
+      }
+    }
+  }
+
+  window.addEventListener('blur', handleBlur);
+  window.addEventListener('focus', handleFocus);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('pagehide', handleBlur);
+  
+  document.addEventListener('keydown', handleKeydown);
+  document.addEventListener('keyup', (e) => {
+    if (e.key === 'PrintScreen' && modalDocViewer && modalDocViewer.style.display === 'flex') {
+      try { navigator.clipboard.writeText('Screenshots disabled.'); } catch(err){}
+      handleBlur();
+      setTimeout(handleFocus, 3000);
+    }
+  });
+});
+
+
+/* ==========================================================================
+   MYTEE — StudyMyte's Official Intelligent AI Ecosystem Frontend Module
+   ========================================================================== */
+
+(function initMyteeAssistant() {
+  const myteeState = {
+    isOpen: false,
+    isSending: false,
+    sessionId: localStorage.getItem('mytee_session_id') || ('sess_' + Math.random().toString(36).substring(2, 12) + Date.now().toString(36)),
+    userRole: 'guest'
+  };
+
+  localStorage.setItem('mytee_session_id', myteeState.sessionId);
+
+  // Extract clean internal SPA route from any StudyMyte link or path, returning null if external
+  function extractInternalRoute(url) {
+    if (!url || typeof url !== 'string') return null;
+    const trimmed = url.trim();
+    if (trimmed.startsWith('action:')) return null;
+    if (trimmed.startsWith('#/')) return trimmed.substring(1); // '#/notes' -> '/notes'
+    if (trimmed.startsWith('#')) return '/' + trimmed.replace(/^#\/?/, '');
+    if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+      if (trimmed === '/studymyte.apk') return null; // APK download file
+      return trimmed;
+    }
+    const match = trimmed.match(/^https?:\/\/(?:www\.)?studymyte\.tech(?::\d+)?(?:\/#)?(\s*\/[^?\s]*)?/i);
+    if (match) {
+      const route = match[1] || '/';
+      return route.startsWith('/') ? route : '/' + route;
+    }
+    const localMatch = trimmed.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/#)?(\s*\/[^?\s]*)?/i);
+    if (localMatch) {
+      const route = localMatch[1] || '/';
+      return route.startsWith('/') ? route : '/' + route;
+    }
+    return null;
+  }
+
+  // Normalize StudyMyte URLs to ensure hash-based routing (#/) for single-page app navigation
+  function normalizeStudymyteUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    return url.replace(/https?:\/\/(?:www\.)?studymyte\.tech\/(?!#)(?!(?:api\/|assets\/|[^\/]+\.(?:png|jpg|jpeg|svg|ico|css|js|json|pdf)))(.*)/i, (m, rest) => {
+      const cleanRest = rest ? rest.replace(/^\//, '') : '';
+      return 'https://studymyte.tech/#/' + cleanRest;
+    });
+  }
+
+  // Markdown-to-HTML parser for rich academic responses
+  function formatMyteeMarkdown(text) {
+    if (!text) return '';
+    let html = text
+      // Escape basic HTML
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      // Headers
+      .replace(/^### (.*$)/gim, '<h4 style="margin: 8px 0 4px; font-size: 14px; font-weight: 700; color: #60a5fa;">$1</h4>')
+      .replace(/^## (.*$)/gim, '<h3 style="margin: 10px 0 6px; font-size: 15px; font-weight: 800; color: #60a5fa;">$1</h3>')
+      // Bold
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      // Italic
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      // Inline code
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      // Bullet points
+      .replace(/^\s*[•\-\*]\s+(.*$)/gim, '<li>$1</li>')
+      // Numbered lists
+      .replace(/^\s*(\d+)\.\s+(.*$)/gim, '<li><strong>$1.</strong> $2</li>')
+      // Markdown links [text](url) - internal links open in same webpage without reload or target="_blank"
+      .replace(/\[([^\]]+)\]\s*\(([^\s\)]+)\)/g, (match, label, url) => {
+        const internalRoute = extractInternalRoute(url);
+        if (internalRoute) {
+          return `<button type="button" class="mytee-nav-pill-btn" data-nav-path="${internalRoute}" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; margin: 0 2px; font-size: 12px; vertical-align: baseline;"><i data-lucide="arrow-right" style="width: 12px; height: 12px; display: inline-block;"></i> <span>${label}</span></button>`;
+        }
+        let brandClass = '';
+        let iconName = 'external-link';
+        if (/instagram/i.test(url) || /instagram/i.test(label)) {
+          brandClass = 'instagram';
+          iconName = 'instagram';
+        } else if (/telegram|t\.me/i.test(url) || /telegram/i.test(label)) {
+          brandClass = 'telegram';
+          iconName = 'send';
+        } else if (/github/i.test(url) || /github/i.test(label)) {
+          brandClass = 'github';
+          iconName = 'github';
+        } else if (/mailto:/i.test(url)) {
+          brandClass = 'mail';
+          iconName = 'mail';
+        }
+        const safeUrl = normalizeStudymyteUrl(url);
+        return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="mytee-link-btn ${brandClass}" title="Opens in a new window"><i data-lucide="${iconName}" style="width: 12px; height: 12px; display: inline-block; vertical-align: middle;"></i> <span>${label}</span> <span style="font-size: 10px; opacity: 0.85;">↗</span></a>`;
+      })
+      // Bare URLs: convert internal URLs to navigation button and external to redirect button
+      .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, (match, prefix, rawUrl) => {
+        const url = rawUrl.replace(/[\.\,\)\;]+$/, '');
+        const internalRoute = extractInternalRoute(url);
+        if (internalRoute) {
+          let label = internalRoute === '/' ? 'StudyMyte Home' : internalRoute.replace(/^\//, '').replace(/-/g, ' ');
+          label = label.charAt(0).toUpperCase() + label.slice(1);
+          return `${prefix}<button type="button" class="mytee-nav-pill-btn" data-nav-path="${internalRoute}" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; margin: 0 2px; font-size: 12px; vertical-align: baseline;"><i data-lucide="arrow-right" style="width: 12px; height: 12px; display: inline-block;"></i> <span>${label}</span></button>`;
+        }
+        let label = url.replace(/^https?:\/\/(www\.)?/, '');
+        if (label.length > 28) label = label.substring(0, 26) + '...';
+        let brandClass = '';
+        let iconName = 'external-link';
+        if (/instagram\.com/i.test(url)) {
+          brandClass = 'instagram';
+          label = 'Instagram';
+          iconName = 'instagram';
+        } else if (/t\.me/i.test(url)) {
+          brandClass = 'telegram';
+          label = 'Telegram';
+          iconName = 'send';
+        } else if (/github\.com/i.test(url)) {
+          brandClass = 'github';
+          label = 'GitHub';
+          iconName = 'github';
+        }
+        const safeUrl = normalizeStudymyteUrl(url);
+        return `${prefix}<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="mytee-link-btn ${brandClass}" title="Opens in a new window"><i data-lucide="${iconName}" style="width: 12px; height: 12px; display: inline-block; vertical-align: middle;"></i> <span>${label}</span> <span style="font-size: 10px; opacity: 0.85;">↗</span></a>`;
+      });
+
+    // Wrap continuous <li> elements in <ul>
+    html = html.replace(/(<li>.*<\/li>)/gms, '<ul style="margin: 6px 0; padding-left: 18px;">$1</ul>');
+
+    // Paragraph line breaks
+    html = html.split('\n\n').map(p => {
+      const trimmed = p.trim();
+      if (!trimmed) return '';
+      if (trimmed.startsWith('<h') || trimmed.startsWith('<ul')) return trimmed;
+      return `<p>${trimmed.replace(/\n/g, '<br/>')}</p>`;
+    }).join('');
+
+    return html;
+  }
+
+  function getAuthTokenHeader() {
+    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  }
+
+  function updateAdminModeUI() {
+    const badge = document.getElementById('mytee-mode-badge');
+    const chipsContainer = document.getElementById('mytee-welcome-chips');
+    const user = (typeof currentUser !== 'undefined') ? currentUser : null;
+
+    if (user && (user.role === 'admin' || user.role === 'superadmin')) {
+      if (badge) {
+        badge.textContent = 'Admin Intel';
+        badge.style.background = 'rgba(234, 179, 8, 0.2)';
+        badge.style.color = '#facc15';
+        badge.style.borderColor = 'rgba(234, 179, 8, 0.4)';
+      }
+
+      // Add admin quick prompts if not already added
+      if (chipsContainer && !chipsContainer.querySelector('[data-admin-chip="true"]')) {
+        const adminChip1 = document.createElement('button');
+        adminChip1.type = 'button';
+        adminChip1.className = 'mytee-chip-btn';
+        adminChip1.setAttribute('data-admin-chip', 'true');
+        adminChip1.setAttribute('data-query', 'How many users joined this week?');
+        adminChip1.innerHTML = '<span>📊</span> [Admin] How many users joined this week?';
+        adminChip1.style.borderColor = 'rgba(234, 179, 8, 0.35)';
+
+        const adminChip2 = document.createElement('button');
+        adminChip2.type = 'button';
+        adminChip2.className = 'mytee-chip-btn';
+        adminChip2.setAttribute('data-admin-chip', 'true');
+        adminChip2.setAttribute('data-query', 'Resource statistics overview');
+        adminChip2.innerHTML = '<span>📈</span> [Admin] Resource statistics overview';
+        adminChip2.style.borderColor = 'rgba(234, 179, 8, 0.35)';
+
+        chipsContainer.prepend(adminChip2);
+        chipsContainer.prepend(adminChip1);
+      }
+    } else {
+      if (badge) {
+        badge.textContent = 'Assistant';
+        badge.style.background = 'rgba(59, 130, 246, 0.2)';
+        badge.style.color = '#60a5fa';
+        badge.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+      }
+    }
+  }
+
+  function toggleMyteeDrawer(forceOpen) {
+    const drawer = document.getElementById('mytee-drawer');
+    if (!drawer) return;
+
+    if (typeof forceOpen === 'boolean') {
+      myteeState.isOpen = forceOpen;
+    } else {
+      myteeState.isOpen = !myteeState.isOpen;
+    }
+
+    if (myteeState.isOpen) {
+      drawer.classList.remove('mytee-hidden');
+      updateAdminModeUI();
+      const input = document.getElementById('mytee-input');
+      if (input) setTimeout(() => input.focus(), 150);
+      scrollMyteeToBottom();
+    } else {
+      drawer.classList.add('mytee-hidden');
+    }
+  }
+
+  function scrollMyteeToBottom() {
+    const msgBox = document.getElementById('mytee-messages');
+    if (msgBox) {
+      msgBox.scrollTop = msgBox.scrollHeight;
+    }
+  }
+
+  function renderTypingIndicator() {
+    removeTypingIndicator();
+    const msgBox = document.getElementById('mytee-messages');
+    if (!msgBox) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'mytee-msg-wrap model';
+    wrap.id = 'mytee-typing-wrap';
+    wrap.innerHTML = `
+      <div class="mytee-typing-dots" title="MYTEE is thinking...">
+        <span></span><span></span><span></span>
+      </div>
+    `;
+    msgBox.appendChild(wrap);
+    scrollMyteeToBottom();
+  }
+
+  function removeTypingIndicator() {
+    const typing = document.getElementById('mytee-typing-wrap');
+    if (typing) typing.remove();
+  }
+
+  function appendUserMessage(text) {
+    const msgBox = document.getElementById('mytee-messages');
+    if (!msgBox) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'mytee-msg-wrap user';
+    wrap.innerHTML = `
+      <div class="mytee-msg-bubble">
+        <p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+      </div>
+    `;
+    msgBox.appendChild(wrap);
+    scrollMyteeToBottom();
+  }
+
+  function appendModelMessage(data) {
+    const msgBox = document.getElementById('mytee-messages');
+    if (!msgBox) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'mytee-msg-wrap model';
+
+    let cardsHtml = '';
+    if (Array.isArray(data.resources) && data.resources.length > 0) {
+      cardsHtml = data.resources.map(res => {
+        const typeClass = res.type === 'paper' ? 'pyq' : '';
+        const tagLabel = res.type === 'paper' ? 'PYQ' : (res.type === 'notes' ? 'NOTES' : res.type.toUpperCase());
+        const docViewUrl = res.viewUrl || `/api/documents/download/${res.id}`;
+        const docDlUrl = `/api/documents/download/${res.id}`;
+
+        return `
+          <div class="mytee-resource-card">
+            <div class="mytee-resource-header">
+              <span class="mytee-resource-title">${res.title}</span>
+              <span class="mytee-type-tag ${typeClass}">${tagLabel}</span>
+            </div>
+            <div class="mytee-resource-meta">
+              <span>📚 ${res.subject}</span>
+              <span>📅 ${res.year}</span>
+              <span>❤️ ${res.likesCount || 0} likes</span>
+            </div>
+            <div class="mytee-resource-actions">
+              <button type="button" class="mytee-btn-action primary mytee-btn-view-doc" data-doc-id="${res.id}" data-file-name="${(res.fileName || res.title || 'Document.pdf').replace(/"/g, '&quot;')}" data-doc-type="${res.type || 'notes'}">
+                <i data-lucide="eye" style="width: 14px; height: 14px;"></i> View Document
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Auto-extract platform links and build prominent redirect buttons
+    const combinedActions = [...(Array.isArray(data.actions) ? data.actions : [])];
+    const existingActionUrls = new Set(combinedActions.map(a => a.path));
+
+    const replyText = data.reply || '';
+    const knownPlatforms = [
+      {
+        match: /https?:\/\/(www\.)?instagram\.com\/[^\s\)\"\']+/i,
+        url: 'https://www.instagram.com/studymyte_official/',
+        label: 'Open Instagram',
+        type: 'instagram'
+      },
+      {
+        match: /https?:\/\/t\.me\/[^\s\)\"\']+/i,
+        url: 'https://t.me/+Y8-xHuu_XBo0ZDBl',
+        label: 'Open Telegram Channel',
+        type: 'telegram'
+      },
+      {
+        match: /https?:\/\/github\.com\/[^\s\)\"\']+/i,
+        url: 'https://github.com/ankitgl200/studyhubStudents',
+        label: 'Open GitHub Repo',
+        type: 'github'
+      },
+      {
+        match: /mailto:support@studymyte\.tech/i,
+        url: 'mailto:support@studymyte.tech',
+        label: 'Email Support',
+        type: 'mail'
+      },
+      {
+        match: /https?:\/\/(?:www\.)?studymyte\.tech(\/#|\/)?support/i,
+        url: 'https://studymyte.tech/#/support',
+        label: 'Open Support Portal',
+        type: 'support'
+      }
+    ];
+
+    for (const plat of knownPlatforms) {
+      if (plat.match.test(replyText) && !existingActionUrls.has(plat.url)) {
+        combinedActions.push({
+          label: plat.label,
+          path: plat.url,
+          external: true,
+          platformType: plat.type
+        });
+        existingActionUrls.add(plat.url);
+      }
+    }
+
+    let actionsHtml = '';
+    if (combinedActions.length > 0) {
+      actionsHtml = `
+        <div class="mytee-actions-container" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;">
+          ${combinedActions.map(act => {
+            const internalRoute = extractInternalRoute(act.path);
+            const isExternal = !internalRoute && (act.external || (act.path && (act.path.startsWith('http://') || act.path.startsWith('https://') || act.path.startsWith('mailto:'))));
+            if (isExternal) {
+              act.path = normalizeStudymyteUrl(act.path);
+              let brandClass = act.platformType || '';
+              let iconName = 'external-link';
+              if (!brandClass) {
+                if (/instagram/i.test(act.path) || /instagram/i.test(act.label)) { brandClass = 'instagram'; iconName = 'instagram'; }
+                else if (/telegram|t\.me/i.test(act.path) || /telegram/i.test(act.label)) { brandClass = 'telegram'; iconName = 'send'; }
+                else if (/github/i.test(act.path) || /github/i.test(act.label)) { brandClass = 'github'; iconName = 'github'; }
+                else if (/mailto:/i.test(act.path)) { brandClass = 'mail'; iconName = 'mail'; }
+                else if (/support/i.test(act.path)) { brandClass = 'support'; iconName = 'life-buoy'; }
+              } else {
+                if (brandClass === 'instagram') iconName = 'instagram';
+                else if (brandClass === 'telegram') iconName = 'send';
+                else if (brandClass === 'github') iconName = 'github';
+                else if (brandClass === 'mail') iconName = 'mail';
+                else if (brandClass === 'support') iconName = 'life-buoy';
+              }
+
+              return `
+                <a href="${act.path}" target="_blank" rel="noopener noreferrer" class="mytee-redirect-card-btn ${brandClass}" title="Opens in a new window">
+                  <i data-lucide="${iconName}" style="width: 14px; height: 14px;"></i>
+                  <span>${act.label}</span>
+                  <span style="font-size: 11px; opacity: 0.85; margin-left: 2px;">↗</span>
+                </a>
+              `;
+            } else {
+              const navPath = internalRoute || act.path;
+              return `
+                <button type="button" class="mytee-nav-pill-btn" data-nav-path="${navPath}">
+                  <i data-lucide="arrow-right" style="width: 12px; height: 12px;"></i> ${act.label}
+                </button>
+              `;
+            }
+          }).join('')}
+        </div>
+      `;
+    }
+
+    let ticketHtml = '';
+    if (data.ticket && data.ticket.ticketCode) {
+      ticketHtml = `
+        <div class="mytee-ticket-card">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+            <span class="mytee-ticket-id">🎫 Ticket ID: ${data.ticket.ticketCode}</span>
+            <span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.2); color: #10b981; font-weight: 700;">CONFIRMED</span>
+          </div>
+          <div style="font-size: 12.5px; color: var(--text-main); margin-bottom: 4px;"><strong>Subject:</strong> ${data.ticket.subject}</div>
+          <div style="font-size: 11.5px; color: var(--text-muted);">Our administrative team has received your report and will review it promptly.</div>
+        </div>
+      `;
+    }
+
+    const messageHtml = formatMyteeMarkdown(data.reply || '');
+
+    wrap.innerHTML = `
+      <div class="mytee-msg-bubble">
+        ${messageHtml}
+        ${cardsHtml}
+        ${ticketHtml}
+        ${actionsHtml}
+        <div class="mytee-msg-footer">
+          <span>Just now</span>
+          <button type="button" class="mytee-feedback-action mytee-btn-copy" title="Copy response">
+            <i data-lucide="copy" style="width: 12px; height: 12px;"></i> Copy
+          </button>
+          <button type="button" class="mytee-feedback-action mytee-btn-like" title="Helpful answer">
+            <i data-lucide="thumbs-up" style="width: 12px; height: 12px;"></i>
+          </button>
+          <button type="button" class="mytee-feedback-action mytee-btn-dislike" title="Not helpful">
+            <i data-lucide="thumbs-down" style="width: 12px; height: 12px;"></i>
+          </button>
+        </div>
+      </div>
+    `;
+
+    msgBox.appendChild(wrap);
+    scrollMyteeToBottom();
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  }
+
+  async function handleSendMyteeMessage(text) {
+    if (!text || typeof text !== 'string') return;
+    const clean = text.trim();
+    if (!clean || myteeState.isSending) return;
+
+    myteeState.isSending = true;
+    appendUserMessage(clean);
+
+    const input = document.getElementById('mytee-input');
+    const sendBtn = document.getElementById('mytee-send-btn');
+    if (input) input.value = '';
+    if (sendBtn) sendBtn.disabled = true;
+
+    renderTypingIndicator();
+
+    try {
+      const response = await fetch('/api/mytee/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthTokenHeader()
+        },
+        body: JSON.stringify({
+          message: clean,
+          sessionId: myteeState.sessionId
+        })
+      });
+
+      removeTypingIndicator();
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          appendModelMessage({
+            reply: `⚠️ ${errJson.message || 'You are sending requests too quickly. Please wait a moment.'}`
+          });
+          return;
+        }
+        throw new Error(errJson.message || 'Server error communicating with MYTEE');
+      }
+
+      const resData = await response.json();
+      if (resData.sessionId) {
+        myteeState.sessionId = resData.sessionId;
+        localStorage.setItem('mytee_session_id', resData.sessionId);
+      }
+
+      if (resData.clientAction) {
+        if (resData.clientAction.type === 'navigate') {
+          const targetPath = resData.clientAction.path || '/';
+          if (typeof navigate === 'function') {
+            navigate(targetPath);
+          } else {
+            window.location.hash = targetPath.startsWith('#') ? targetPath : '#' + (targetPath.startsWith('/') ? targetPath : '/' + targetPath);
+          }
+          if (window.innerWidth <= 768 && typeof toggleMyteeDrawer === 'function') {
+            toggleMyteeDrawer(false);
+          }
+        } else if (resData.clientAction.type === 'set_theme' && typeof setThemeMode === 'function') {
+          setThemeMode(resData.clientAction.value, true);
+        } else if (resData.clientAction.type === 'set_font' && typeof applyFontStyle === 'function') {
+          applyFontStyle(resData.clientAction.value, true);
+        } else if (resData.clientAction.type === 'download_app_android') {
+          const dlLink = document.createElement('a');
+          dlLink.href = '/studymyte.apk';
+          dlLink.download = 'studymyte.apk';
+          document.body.appendChild(dlLink);
+          dlLink.click();
+          document.body.removeChild(dlLink);
+        }
+      }
+
+      appendModelMessage(resData);
+
+    } catch (err) {
+      removeTypingIndicator();
+      console.error('[MYTEE Client] Error:', err);
+      appendModelMessage({
+        reply: 'I encountered an error connecting to StudyMyte intelligence services. Please check your internet connection or try again.',
+        actions: [{ label: 'Go to Support', path: '/support' }]
+      });
+    } finally {
+      myteeState.isSending = false;
+      if (sendBtn) sendBtn.disabled = false;
+      if (input) input.focus();
+    }
+  }
+
+  async function handleClearHistory() {
+    const msgBox = document.getElementById('mytee-messages');
+    if (!msgBox) return;
+
+    // Reset session ID
+    myteeState.sessionId = 'sess_' + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+    localStorage.setItem('mytee_session_id', myteeState.sessionId);
+
+    // Call server to clear history if authenticated
+    try {
+      await fetch('/api/mytee/history', {
+        method: 'DELETE',
+        headers: getAuthTokenHeader()
+      });
+    } catch (e) {
+      // Ignore
+    }
+
+    // Reset messages container to initial welcome state
+    msgBox.innerHTML = `
+      <div class="mytee-msg-wrap model">
+        <div class="mytee-msg-bubble">
+          <p>👋 Chat cleared! I am <strong>MYTEE</strong>, your StudyMyte AI assistant.</p>
+          <p>How can I assist you with your academics or StudyMyte today?</p>
+          <div class="mytee-chips-grid" id="mytee-welcome-chips">
+            <button type="button" class="mytee-chip-btn" data-query="Give me PYQs for 2nd year OOPS">
+              <span>📄</span> Find 2nd year OOPS PYQs
+            </button>
+            <button type="button" class="mytee-chip-btn" data-query="Find notes for Engineering Mathematics">
+              <span>📚</span> Engineering Mathematics Notes
+            </button>
+            <button type="button" class="mytee-chip-btn" data-query="How do I upload notes or papers?">
+              <span>📤</span> How to contribute & upload notes
+            </button>
+            <button type="button" class="mytee-chip-btn" data-query="Who created StudyMyte?">
+              <span>👥</span> Who created StudyMyte?
+            </button>
+            <button type="button" class="mytee-chip-btn" data-query="How can I contact technical support?">
+              <span>🛠️</span> Help & Support / Report an Issue
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    updateAdminModeUI();
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  }
+
+  // Bind DOM Event Listeners
+  document.addEventListener('DOMContentLoaded', () => {
+    const launcher = document.getElementById('mytee-launcher');
+    const closeBtn = document.getElementById('mytee-btn-close');
+    const clearBtn = document.getElementById('mytee-btn-clear');
+    const form = document.getElementById('mytee-form');
+    const input = document.getElementById('mytee-input');
+    const messagesBox = document.getElementById('mytee-messages');
+
+    if (launcher) {
+      launcher.addEventListener('click', () => toggleMyteeDrawer());
+    }
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => toggleMyteeDrawer(false));
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', handleClearHistory);
+    }
+
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (input) handleSendMyteeMessage(input.value);
+      });
+    }
+
+    // Delegate clicks for suggestion chips, action pills, copy, feedback
+    if (messagesBox) {
+      messagesBox.addEventListener('click', (e) => {
+        // View document in inbuilt viewer
+        const viewDocBtn = e.target.closest('.mytee-btn-view-doc');
+        if (viewDocBtn) {
+          const docId = viewDocBtn.getAttribute('data-doc-id');
+          const fileName = viewDocBtn.getAttribute('data-file-name') || 'Document.pdf';
+          const docType = viewDocBtn.getAttribute('data-doc-type') || 'notes';
+          if (docId && typeof window.openDocumentViewer === 'function') {
+            window.openDocumentViewer(docId, fileName, docType);
+            if (window.innerWidth <= 768) {
+              toggleMyteeDrawer(false);
+            }
+          }
+          return;
+        }
+
+        // Suggestion chip clicked
+        const chip = e.target.closest('.mytee-chip-btn');
+        if (chip) {
+          const query = chip.getAttribute('data-query');
+          if (query) handleSendMyteeMessage(query);
+          return;
+        }
+
+        // Navigation pill clicked
+        const navBtn = e.target.closest('.mytee-nav-pill-btn');
+        if (navBtn) {
+          const path = navBtn.getAttribute('data-nav-path');
+          if (path && (path.startsWith('action:open_page:') || path.startsWith('action:navigate:'))) {
+            const cleanPath = path.replace(/^action:(?:open_page:|navigate:)/, '').trim();
+            if (typeof navigate === 'function') navigate(cleanPath);
+            if (window.innerWidth <= 768 && typeof toggleMyteeDrawer === 'function') toggleMyteeDrawer(false);
+            return;
+          }
+          if (path && path.startsWith('action:')) {
+            if (path === 'action:send_reset_otp') {
+              handleSendMyteeMessage('Yes, send verification code');
+            } else if (path === 'action:mode_normal') {
+              handleSendMyteeMessage('normal mode');
+            } else if (path === 'action:mode_roast') {
+              handleSendMyteeMessage('roast me again');
+            } else if (path.startsWith('action:set_theme:')) {
+              const themeVal = path.replace('action:set_theme:', '');
+              if (typeof setThemeMode === 'function') setThemeMode(themeVal, true);
+              handleSendMyteeMessage(`Switch to ${themeVal} mode`);
+            } else if (path.startsWith('action:set_font:')) {
+              const fontVal = path.replace('action:set_font:', '');
+              if (typeof applyFontStyle === 'function') applyFontStyle(fontVal, true);
+              handleSendMyteeMessage(`Set font to ${fontVal}`);
+            } else if (path === 'action:list_fonts') {
+              handleSendMyteeMessage('Show available typography fonts');
+            } else if (path === 'action:download_android_apk') {
+              const dlLink = document.createElement('a');
+              dlLink.href = '/studymyte.apk';
+              dlLink.download = 'studymyte.apk';
+              document.body.appendChild(dlLink);
+              dlLink.click();
+              document.body.removeChild(dlLink);
+            } else if (path === 'action:ios_app_info') {
+              alert('📱 iOS App Status: StudyMyte for iOS is currently under active development. You can add StudyMyte to your iPhone Home Screen via Safari (tap Share ➔ Add to Home Screen)!');
+            } else {
+              handleSendMyteeMessage(path.replace('action:', ''));
+            }
+            return;
+          }
+          if (path && typeof navigate === 'function') {
+            navigate(path);
+            if (window.innerWidth <= 768) {
+              toggleMyteeDrawer(false); // Close drawer on mobile so page is visible
+            }
+          }
+          return;
+        }
+
+        // Copy button clicked
+        const copyBtn = e.target.closest('.mytee-btn-copy');
+        if (copyBtn) {
+          const bubble = copyBtn.closest('.mytee-msg-bubble');
+          if (bubble) {
+            const clone = bubble.cloneNode(true);
+            const footer = clone.querySelector('.mytee-msg-footer');
+            if (footer) footer.remove();
+            const textToCopy = clone.innerText.trim();
+            navigator.clipboard.writeText(textToCopy).then(() => {
+              copyBtn.innerHTML = '<i data-lucide="check" style="width: 12px; height: 12px;"></i> Copied!';
+              if (window.lucide) window.lucide.createIcons();
+              setTimeout(() => {
+                copyBtn.innerHTML = '<i data-lucide="copy" style="width: 12px; height: 12px;"></i> Copy';
+                if (window.lucide) window.lucide.createIcons();
+              }, 2000);
+            }).catch(() => {});
+          }
+          return;
+        }
+
+        // Like / Dislike feedback
+        const likeBtn = e.target.closest('.mytee-btn-like');
+        const dislikeBtn = e.target.closest('.mytee-btn-dislike');
+        if (likeBtn || dislikeBtn) {
+          const rating = likeBtn ? 'helpful' : 'unhelpful';
+          const btn = likeBtn || dislikeBtn;
+          btn.style.color = likeBtn ? '#10b981' : '#ef4444';
+
+          fetch('/api/mytee/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthTokenHeader() },
+            body: JSON.stringify({
+              sessionId: myteeState.sessionId,
+              rating
+            })
+          }).catch(() => {});
+        }
+      });
+    }
+
+    // Keyboard navigation: Escape key closes MYTEE
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && myteeState.isOpen) {
+        toggleMyteeDrawer(false);
+      }
+    });
+
+    // Initialize Lucide icons
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  });
+
+  // Expose global controller
+  window.mytee = {
+    open: () => toggleMyteeDrawer(true),
+    close: () => toggleMyteeDrawer(false),
+    toggle: () => toggleMyteeDrawer(),
+    send: (q) => handleSendMyteeMessage(q)
+  };
+})();
