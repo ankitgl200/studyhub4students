@@ -12792,18 +12792,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const drawer = document.getElementById('mytee-drawer');
     if (!drawer) return;
 
-    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
     const willOpen = typeof forceOpen === 'boolean' ? forceOpen : !myteeState.isOpen;
-
-    if (willOpen && !token) {
-      alert('🔒 Please log in to your StudyMyte account to access MYTEE AI.');
-      if (typeof navigate === 'function') {
-        navigate('/login');
-      } else {
-        window.location.hash = '#/login';
-      }
-      return;
-    }
 
     if (typeof forceOpen === 'boolean') {
       myteeState.isOpen = forceOpen;
@@ -13051,23 +13040,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const clean = text.trim();
     if (!clean || myteeState.isSending) return;
 
-    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
-    if (!token) {
-      appendModelMessage({
-        reply: '🔒 **Please Log In to Access MYTEE**\n\nMYTEE AI is available exclusively to registered members. Please log in or create an account to start asking questions or exploring study resources.',
-        actions: [
-          { label: 'Log In', path: '/login' },
-          { label: 'Register', path: '/register' }
-        ]
-      });
-      if (typeof navigate === 'function') {
-        navigate('/login');
-      } else {
-        window.location.hash = '#/login';
-      }
-      return;
-    }
-
     myteeState.isSending = true;
     appendUserMessage(clean);
 
@@ -13234,7 +13206,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const messagesBox = document.getElementById('mytee-messages');
 
     if (launcher) {
-      window.myteeCompanion = new MyteeRobotCompanion(launcher, () => toggleMyteeDrawer());
+      window.toggleMyteeDrawer = toggleMyteeDrawer;
+    window.myteeCompanion = new MyteeRobotCompanion(launcher, () => toggleMyteeDrawer());
+    launcher.addEventListener('click', (e) => {
+      // Direct click backup to ensure 100% reliable trigger
+      toggleMyteeDrawer();
+    });
     }
 
     if (closeBtn) {
