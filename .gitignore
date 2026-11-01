@@ -23,3 +23,6 @@ backend/uploads/*
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Local backup directory
+_backups/
