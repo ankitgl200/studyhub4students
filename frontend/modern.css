@@ -6539,6 +6539,44 @@ body, input, select, textarea, button {
   color: var(--text-muted, #94a3b8);
 }
 
+/* ChatGPT-Style Live Typewriter Streaming Cursor */
+.mytee-streaming-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 15px;
+  background: #38bdf8;
+  margin-left: 3px;
+  border-radius: 2px;
+  vertical-align: middle;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.9);
+  animation: myteeCursorBlink 0.75s infinite ease-in-out;
+}
+
+[data-theme="light"] .mytee-streaming-cursor {
+  background: #0284c7;
+  box-shadow: 0 0 8px rgba(2, 132, 199, 0.7);
+}
+
+@keyframes myteeCursorBlink {
+  0%, 100% { opacity: 1; transform: scaleY(1); }
+  50% { opacity: 0.1; transform: scaleY(0.85); }
+}
+
+.mytee-revealed-content {
+  animation: myteeFadeUpCards 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes myteeFadeUpCards {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .mytee-feedback-action {
   background: none;
   border: none;
