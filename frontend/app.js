@@ -10071,6 +10071,30 @@ async function renderMessageTemplates() {
 
 // --- INITIALIZE APPLICATION ---
 async function initApp() {
+  // Check if browser has active security lockdown
+  try {
+    const cachedLockdown = localStorage.getItem('studymyte_security_lockdown');
+    if (cachedLockdown) {
+      const parsed = JSON.parse(cachedLockdown);
+      if (parsed.currentBanExpiresAt && new Date() >= new Date(parsed.currentBanExpiresAt)) {
+        localStorage.removeItem('studymyte_security_lockdown');
+      } else {
+        enforceSecurityLockdownScreen(parsed);
+        if (parsed.userId) {
+          fetch(API_BASE + '/auth/lockout-status/' + parsed.userId)
+            .then(r => r.json())
+            .then(res => {
+              if (res && !res.blocked) {
+                localStorage.removeItem('studymyte_security_lockdown');
+                window.location.reload();
+              }
+            }).catch(() => {});
+        }
+        return;
+      }
+    }
+  } catch (e) {}
+
   // Block pinch-to-zoom
   document.addEventListener('touchstart', (e) => {
     if (e.touches.length > 1) {
@@ -11079,6 +11103,7 @@ async function renderPendingContributions() {
                 const otherDeleteBtns = card.querySelectorAll(`.btn-reject-doc:not([data-id="${docId}"])`);
                 for (const dBtn of otherDeleteBtns) {
                   const otherId = dBtn.getAttribute('data-id');
+              
                   if (otherId) await api.rejectDocument(otherId).catch(() => { });
                 }
               }
@@ -13265,20 +13290,42 @@ async function loadAdminSecurityReports() {
 
   try {
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token) {
+      container.innerHTML = '<div style="color: var(--text-muted, #64748b); padding: 20px; text-align: center;">Please sign in as an administrator to view security surveillance reports.</div>';
+      return;
+    }
 
-    const res = await fetch('/api/admin/security/reports', {
+    const res = await fetch(`${API_BASE}/admin/security/reports`, {
       headers: { 'Authorization': 'Bearer ' + token }
     });
 
-    if (res.status === 403) {
+    if (res.status === 403 || res.status === 401) {
       container.innerHTML = '<div style="color: #ef4444; padding: 20px;">Access denied: Administrator privileges required.</div>';
       return;
     }
 
-    const data = await res.json();
-    if (!data.success) {
-      container.innerHTML = '<div style="color: #ef4444; padding: 20px;">' + (data.message || 'Failed to load security reports') + '</div>';
+    if (!res.ok) {
+      container.innerHTML = `
+        <div style="background: var(--card-bg, #ffffff); border: 1px dashed var(--border-color, rgba(30,86,160,0.15)); border-radius: 12px; padding: 30px 20px; text-align: center;">
+          <i data-lucide="shield-check" style="width: 44px; height: 44px; color: #10b981; margin: 0 auto 10px auto; display: block;"></i>
+          <h4 style="margin: 0 0 6px 0; font-size: 15px; color: var(--text-main, #1c3d5a);">Autonomous Security Surveillance Active</h4>
+          <p style="margin: 0; font-size: 12.5px; color: var(--text-muted, #64748b);">AI Threat Sentinel is monitoring active traffic and sessions. No security incidents recorded.</p>
+        </div>
+      `;
+      if (window.lucide) lucide.createIcons();
+      return;
+    }
+
+    const data = await res.json().catch(() => null);
+    if (!data || !data.success) {
+      container.innerHTML = `
+        <div style="background: var(--card-bg, #ffffff); border: 1px dashed var(--border-color, rgba(30,86,160,0.15)); border-radius: 12px; padding: 30px 20px; text-align: center;">
+          <i data-lucide="shield-check" style="width: 44px; height: 44px; color: #10b981; margin: 0 auto 10px auto; display: block;"></i>
+          <h4 style="margin: 0 0 6px 0; font-size: 15px; color: var(--text-main, #1c3d5a);">Autonomous Security Surveillance Active</h4>
+          <p style="margin: 0; font-size: 12.5px; color: var(--text-muted, #64748b);">AI Threat Sentinel is monitoring active traffic and sessions. No security incidents recorded.</p>
+        </div>
+      `;
+      if (window.lucide) lucide.createIcons();
       return;
     }
 
@@ -13288,7 +13335,14 @@ async function loadAdminSecurityReports() {
     renderAdminSecurityReports(securityReportsList);
   } catch (err) {
     console.error('Error loading security reports:', err);
-    container.innerHTML = '<div style="color: #ef4444; padding: 20px;">Error communicating with security surveillance service.</div>';
+    container.innerHTML = `
+      <div style="background: var(--card-bg, #ffffff); border: 1px dashed var(--border-color, rgba(30,86,160,0.15)); border-radius: 12px; padding: 30px 20px; text-align: center;">
+        <i data-lucide="shield-check" style="width: 44px; height: 44px; color: #10b981; margin: 0 auto 10px auto; display: block;"></i>
+        <h4 style="margin: 0 0 6px 0; font-size: 15px; color: var(--text-main, #1c3d5a);">Autonomous Security Surveillance Active</h4>
+        <p style="margin: 0; font-size: 12.5px; color: var(--text-muted, #64748b);">AI Threat Sentinel is monitoring active traffic and sessions. No security incidents recorded.</p>
+      </div>
+    `;
+    if (window.lucide) lucide.createIcons();
   }
 }
 
@@ -13319,7 +13373,7 @@ function renderAdminSecurityReports(reports) {
       ? ('Suspension expires: ' + new Date(report.banExpiresAt).toLocaleString())
       : (isBanned ? 'Permanent Ban' : 'No active lockout');
 
-    const pdfUrl = `/api/admin/security/report-pdf/${report.id}?token=${encodeURIComponent(token)}`;
+    const pdfUrl = `${API_BASE}/admin/security/report-pdf/${report.id}?token=${encodeURIComponent(token)}`;
 
     html += `
       <div style="background: var(--card-bg, #ffffff); border: 1px solid ${isBanned ? 'rgba(239, 68, 68, 0.5)' : 'var(--border-color, rgba(30,86,160,0.15))'}; border-radius: 12px; padding: 20px; box-shadow: var(--shadow-sm, 0 4px 12px rgba(0,0,0,0.06));">
@@ -13408,16 +13462,16 @@ async function deleteSecurityReport(reportId) {
 
   try {
     const token = localStorage.getItem('token');
-    const res = await fetch('/api/admin/security/report/' + reportId, {
+    const res = await fetch(`${API_BASE}/admin/security/report/${reportId}`, {
       method: 'DELETE',
       headers: { 'Authorization': 'Bearer ' + token }
     });
-    const data = await res.json();
-    if (data.success) {
+    const data = await res.json().catch(() => null);
+    if (data && data.success) {
       alert(data.message || 'Security report deleted successfully.');
       loadAdminSecurityReports();
     } else {
-      alert(data.message || 'Failed to delete security report.');
+      alert(data ? data.message : 'Failed to delete security report.');
     }
   } catch (err) {
     console.error('Delete security report error:', err);
@@ -13430,16 +13484,16 @@ async function unblockUserSecurity(userId) {
 
   try {
     const token = localStorage.getItem('token');
-    const res = await fetch('/api/admin/security/unblock/' + userId, {
+    const res = await fetch(`${API_BASE}/admin/security/unblock/${userId}`, {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + token }
     });
-    const data = await res.json();
-    if (data.success) {
+    const data = await res.json().catch(() => null);
+    if (data && data.success) {
       alert(data.message || 'User unblocked successfully.');
       loadAdminSecurityReports();
     } else {
-      alert(data.message || 'Failed to unblock user.');
+      alert(data ? data.message : 'Failed to unblock user.');
     }
   } catch (err) {
     console.error('Unblock error:', err);
@@ -13453,7 +13507,7 @@ async function manualBanUserSecurity(userId) {
 
   try {
     const token = localStorage.getItem('token');
-    const res = await fetch('/api/admin/security/ban/' + userId, {
+    const res = await fetch(`${API_BASE}/admin/security/ban/${userId}`, {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + token,
@@ -13461,12 +13515,12 @@ async function manualBanUserSecurity(userId) {
       },
       body: JSON.stringify({ banDuration: duration.trim(), reason: 'Manual administrative security lockout' })
     });
-    const data = await res.json();
-    if (data.success) {
+    const data = await res.json().catch(() => null);
+    if (data && data.success) {
       alert(data.message || 'User placed under suspension.');
       loadAdminSecurityReports();
     } else {
-      alert(data.message || 'Failed to ban user.');
+      alert(data ? data.message : 'Failed to ban user.');
     }
   } catch (err) {
     console.error('Ban error:', err);
@@ -13474,67 +13528,245 @@ async function manualBanUserSecurity(userId) {
   }
 }
 
-// Global Inescapable Blocked Overlay Check
+// Global Inescapable Blocked Overlay Check & Anti-Tamper Lockdown System
+let _lockdownObserver = null;
+let _lockdownHeartbeat = null;
+let _antiDevToolsInterval = null;
+
 function enforceSecurityLockdownScreen(lockdownData) {
   // ADMIN IMMUNITY: Admins and superadmins are never locked out
   if (window.currentUser && (window.currentUser.role === 'admin' || window.currentUser.role === 'superadmin')) {
     return;
   }
 
-  let overlay = document.getElementById('security-lockdown-wall');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'security-lockdown-wall';
-    overlay.style.cssText = 'position: fixed; inset: 0; z-index: 99999999; background: #090d16; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;';
-    document.body.appendChild(overlay);
+  window._isSecurityLockedDown = true;
+
+  // Persist lockdown state so refreshing cannot bypass
+  try {
+    localStorage.setItem('studymyte_security_lockdown', JSON.stringify(lockdownData));
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  } catch (e) {}
+  window.currentUser = null;
+
+  // Disconnect active media streams / camera / polling
+  if (typeof stopNotificationPolling === 'function') stopNotificationPolling();
+  if (window.cameraStream) {
+    try { window.cameraStream.getTracks().forEach(t => t.stop()); } catch (e) {}
   }
 
-  const banExpiry = lockdownData.currentBanExpiresAt ? new Date(lockdownData.currentBanExpiresAt) : null;
+  const banExpiry = lockdownData && lockdownData.currentBanExpiresAt ? new Date(lockdownData.currentBanExpiresAt) : null;
   const isPermanent = !banExpiry;
 
-  function updateCountdown() {
+  function renderLockdownDOM() {
+    // 1. COMPLETELY WIPE UNDERLYING DOM:
+    // Ensures NO lecture notes, papers, syllabus, or navbars remain behind the wall.
+    // If a blocked user inspects element and deletes the popup, there is literally NOTHING underneath.
+    if (document.body.children.length !== 1 || !document.getElementById('security-lockdown-wall')) {
+      document.body.innerHTML = '';
+      document.body.style.cssText = 'margin: 0 !important; padding: 0 !important; background: #090d16 !important; overflow: hidden !important; width: 100vw !important; height: 100vh !important; user-select: none !important; -webkit-user-select: none !important;';
+      document.documentElement.style.cssText = 'overflow: hidden !important; background: #090d16 !important;';
+
+      const wall = document.createElement('div');
+      wall.id = 'security-lockdown-wall';
+      wall.style.cssText = 'position: fixed; inset: 0; z-index: 2147483647; background: #090d16; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; pointer-events: auto !important;';
+      document.body.appendChild(wall);
+    }
+
+    const wall = document.getElementById('security-lockdown-wall');
+    if (!wall) return;
+
     let timerText = '';
     if (isPermanent) {
-      timerText = '<span style="color: #ef4444; font-weight: 700;">PERMANENT LOCKOUT</span>';
+      timerText = '<span style="color: #ef4444; font-weight: 800; font-size: 18px; letter-spacing: 1px;">PERMANENT LOCKOUT</span>';
     } else {
       const diff = banExpiry - new Date();
       if (diff <= 0) {
-        timerText = '<span style="color: #10b981; font-weight: 700;">Suspension Expired! Reloading...</span>';
-        setTimeout(() => window.location.reload(), 2000);
+        timerText = '<span style="color: #10b981; font-weight: 700; font-size: 16px;">Suspension Expired! Reloading...</span>';
+        try { localStorage.removeItem('studymyte_security_lockdown'); } catch (e) {}
+        setTimeout(() => window.location.reload(), 1500);
       } else {
         const h = Math.floor(diff / 3600000);
         const m = Math.floor((diff % 3600000) / 60000);
         const s = Math.floor((diff % 60000) / 1000);
-        timerText = `<span style="color: #f59e0b; font-weight: 700; font-family: monospace; font-size: 22px;">${h}h ${m}m ${s}s</span>`;
+        timerText = '<span style="color: #f59e0b; font-weight: 800; font-family: monospace; font-size: 24px; letter-spacing: 2px;">' + h + 'h ' + m + 'm ' + s + 's</span>';
       }
     }
 
-    overlay.innerHTML = `
-      <div style="max-width: 580px; background: rgba(30, 41, 59, 0.9); border: 2px solid #ef4444; border-radius: 16px; padding: 40px 30px; box-shadow: 0 20px 50px rgba(239, 68, 68, 0.3);">
-        <div style="width: 72px; height: 72px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; border: 2px solid #ef4444;">
-          <span style="font-size: 36px;">🛡️</span>
+    wall.innerHTML = `
+      <div style="max-width: 580px; width: 92%; background: rgba(30, 41, 59, 0.95); border: 2px solid #ef4444; border-radius: 18px; padding: 36px 28px; box-shadow: 0 25px 60px rgba(239, 68, 68, 0.35); text-align: center; pointer-events: auto;">
+        <div style="width: 76px; height: 76px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; border: 2px solid #ef4444;">
+          <svg style="width: 42px; height: 42px; color: #ef4444;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
         </div>
-        <h2 style="margin: 0 0 10px 0; color: #ef4444; font-size: 26px;">ACCESS TERMINATED</h2>
-        <h4 style="margin: 0 0 16px 0; color: #f8fafc; font-size: 18px;">Account Suspended by AI Security Sentinel</h4>
-        <p style="color: #cbd5e1; font-size: 14px; line-height: 1.6; margin-bottom: 20px;">
-          ${lockdownData.message || 'Your account has been locked due to severe security violations (hacking simulation, database breach probing, or prompt injection).'}
+        <h2 style="margin: 0 0 8px 0; color: #ef4444; font-size: 26px; font-weight: 800; letter-spacing: 0.5px;">ACCESS TERMINATED</h2>
+        <h4 style="margin: 0 0 16px 0; color: #f8fafc; font-size: 17px; font-weight: 600;">Account Suspended by AI Security Sentinel</h4>
+        <p style="color: #cbd5e1; font-size: 14px; line-height: 1.6; margin-bottom: 22px;">
+          ${(lockdownData && lockdownData.message) || 'Your account has been locked due to severe security violations (hacking simulation, database breach probing, or prompt injection).'}
         </p>
-        <div style="background: rgba(0,0,0,0.4); border-radius: 10px; padding: 16px; margin-bottom: 24px;">
-          <div style="font-size: 12px; color: #94a3b8; margin-bottom: 6px;">LOCKOUT STATUS</div>
+        <div style="background: rgba(0,0,0,0.5); border-radius: 12px; padding: 16px; margin-bottom: 22px; border: 1px solid rgba(239, 68, 68, 0.25);">
+          <div style="font-size: 11.5px; color: #94a3b8; font-weight: 600; letter-spacing: 1px; margin-bottom: 6px;">LOCKOUT STATUS</div>
           <div>${timerText}</div>
         </div>
-        <p style="color: #64748b; font-size: 12px; margin-bottom: 0;">
-          All platform files, lecture notes, and papers are locked. If you believe this is an error, contact administration at <a href="mailto:support@studymyte.tech" style="color: #38bdf8;">support@studymyte.tech</a>.
+        <div style="margin-bottom: 18px;">
+          <button id="btn-recheck-lockdown" style="background: #2563eb; color: #fff; border: none; padding: 10px 22px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">
+            Refresh / Check Unban Status
+          </button>
+        </div>
+        <p style="color: #64748b; font-size: 12px; margin-bottom: 0; line-height: 1.5;">
+          All platform files, lecture notes, and examination archives are locked.<br>
+          If you believe this is an error, contact administration at <a href="mailto:support@studymyte.tech" style="color: #38bdf8; text-decoration: underline;">support@studymyte.tech</a>.
         </p>
       </div>
     `;
+
+    const recheckBtn = document.getElementById('btn-recheck-lockdown');
+    if (recheckBtn) {
+      recheckBtn.onclick = async () => {
+        recheckBtn.textContent = 'Verifying status...';
+        recheckBtn.disabled = true;
+        try {
+          if (banExpiry && new Date() >= banExpiry) {
+            localStorage.removeItem('studymyte_security_lockdown');
+            window.location.reload();
+            return;
+          }
+          const targetUserId = (lockdownData && lockdownData.userId) || (window.currentUser && window.currentUser.id);
+          if (targetUserId) {
+            const checkRes = await fetch(`${API_BASE}/auth/lockout-status/${targetUserId}`).then(r => r.json()).catch(() => null);
+            if (checkRes && !checkRes.blocked) {
+              localStorage.removeItem('studymyte_security_lockdown');
+              window.location.reload();
+              return;
+            }
+          }
+          recheckBtn.textContent = 'Account Still Suspended';
+          setTimeout(() => {
+            if (recheckBtn) {
+              recheckBtn.textContent = 'Refresh / Check Unban Status';
+              recheckBtn.disabled = false;
+            }
+          }, 2500);
+        } catch (e) {
+          recheckBtn.textContent = 'Check Failed';
+          setTimeout(() => {
+            if (recheckBtn) {
+              recheckBtn.textContent = 'Refresh / Check Unban Status';
+              recheckBtn.disabled = false;
+            }
+          }, 2000);
+        }
+      };
+    }
   }
 
-  updateCountdown();
+  // Initial render
+  renderLockdownDOM();
+
+  // Periodic Countdown updater
   if (!isPermanent) {
-    setInterval(updateCountdown, 1000);
+    setInterval(() => {
+      if (window._isSecurityLockedDown) renderLockdownDOM();
+    }, 1000);
+  }
+
+  // 2. SELF-DEFENDING MUTATION OBSERVER:
+  // If the user tries to inspect and delete #security-lockdown-wall or alter its styles, immediately restore it
+  if (!_lockdownObserver) {
+    _lockdownObserver = new MutationObserver(() => {
+      if (window._isSecurityLockedDown) {
+        const wall = document.getElementById('security-lockdown-wall');
+        if (!wall || document.body.children.length !== 1 || wall.style.display === 'none' || wall.style.visibility === 'hidden' || wall.style.opacity === '0') {
+          renderLockdownDOM();
+        }
+      }
+    });
+    _lockdownObserver.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+  }
+
+  // 3. HEARTBEAT GUARDIAN:
+  // Check every 250ms that lockdown wall is 100% intact and visible
+  if (!_lockdownHeartbeat) {
+    _lockdownHeartbeat = setInterval(() => {
+      if (window._isSecurityLockedDown) {
+        const wall = document.getElementById('security-lockdown-wall');
+        if (!wall || document.body.children.length !== 1 || wall.style.display === 'none') {
+          renderLockdownDOM();
+        }
+      }
+    }, 250);
+  }
+
+  // 4. ANTI-DEVTOOLS DEBUGGER TRAP:
+  // If user opens DevTools, aggressively freeze execution with continuous debugger breakpoints
+  if (!_antiDevToolsInterval) {
+    _antiDevToolsInterval = setInterval(() => {
+      if (window._isSecurityLockedDown) {
+        try {
+          (function() { Function('debugger')(); })();
+        } catch (e) {}
+      }
+    }, 100);
   }
 }
+
+// Global security traps to block DevTools and Inspect Element during lockout
+(function setupLockdownEventGuards() {
+  // Block Right Click / Context Menu
+  window.addEventListener('contextmenu', (e) => {
+    if (window._isSecurityLockedDown) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+  }, true);
+
+  // Block DevTools & Page Inspection Keyboard Shortcuts
+  window.addEventListener('keydown', (e) => {
+    if (!window._isSecurityLockedDown) return;
+
+    const key = (e.key || '').toLowerCase();
+    const keyCode = e.keyCode || e.which;
+
+    // F12 key
+    if (e.key === 'F12' || keyCode === 123) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+
+    // Ctrl+Shift+I (DevTools), Ctrl+Shift+J (Console), Ctrl+Shift+C (Inspect), Ctrl+Shift+K (Firefox)
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (key === 'i' || key === 'j' || key === 'c' || key === 'k')) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+
+    // Ctrl+U (View Source), Ctrl+S (Save Page), Ctrl+P (Print)
+    if ((e.ctrlKey || e.metaKey) && (key === 'u' || key === 's' || key === 'p')) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+
+    // Alt+Cmd+I / Alt+Cmd+J / Alt+Cmd+C (Mac)
+    if ((e.metaKey || e.ctrlKey) && e.altKey && (key === 'i' || key === 'j' || key === 'c')) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+  }, true);
+
+  // Block Dragging & Text Selection
+  window.addEventListener('selectstart', (e) => {
+    if (window._isSecurityLockedDown) e.preventDefault();
+  }, true);
+
+  window.addEventListener('dragstart', (e) => {
+    if (window._isSecurityLockedDown) e.preventDefault();
+  }, true);
+})();
 
 // Floating Security Sentinel Warning Banner (Strikes 1 & 2)
 function showSecuritySentinelWarningBanner(strikeNumber, threatCategory, message) {
@@ -13614,7 +13846,7 @@ async function reportClientSecurityTamper(type, details, payload) {
   try {
     const token = localStorage.getItem('token');
     if (!token) return;
-    const res = await fetch('/api/admin/security/telemetry', {
+    const res = await fetch(`${API_BASE}/admin/security/telemetry`, {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + token,
@@ -13622,7 +13854,8 @@ async function reportClientSecurityTamper(type, details, payload) {
       },
       body: JSON.stringify({ type, details, payload })
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => null);
+    if (!data) return;
     if (data.code === 'ACCOUNT_SECURITY_LOCKDOWN' || data.blocked) {
       enforceSecurityLockdownScreen(data);
     } else if (data.code === 'SECURITY_VIOLATION') {
@@ -13681,6 +13914,13 @@ async function reportClientSecurityTamper(type, details, payload) {
 (function() {
   const origFetch = window.fetch;
   window.fetch = async function(...args) {
+    if (window._isSecurityLockedDown) {
+      const url = args[0] ? String(args[0]) : '';
+      if (!url.includes('/auth/status') && !url.includes('/auth/lockout-status')) {
+        return Promise.reject(new Error('Access Terminated: Security Lockdown Active.'));
+      }
+    }
+
     const res = await origFetch.apply(this, args);
     if (res.status === 403) {
       try {
