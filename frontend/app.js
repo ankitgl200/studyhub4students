@@ -12374,6 +12374,44 @@ function initContributionEventHandlers() {
     pageVisibilityObserver = null,
     currentCssScale = 1;
 
+  function drawStudyMyteViewerWatermark(ctx, width, height) {
+    if (!ctx || width < 60 || height < 60) return;
+    try {
+      ctx.save();
+
+      // 1. Subtle, readable diagonal center watermark (7% opacity)
+      const minDim = Math.min(width, height);
+      const fontSize = Math.max(26, Math.min(64, minDim * 0.08));
+      ctx.globalAlpha = 0.07;
+      ctx.fillStyle = '#1e3a8a'; // StudyMyte brand blue
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      ctx.translate(width / 2, height / 2);
+      ctx.rotate(-45 * Math.PI / 180);
+
+      ctx.font = `bold ${fontSize}px sans-serif`;
+      ctx.fillText('StudyMyte', 0, -fontSize * 0.25);
+
+      ctx.font = `600 ${Math.max(9, fontSize * 0.3)}px sans-serif`;
+      ctx.fillText('VERIFIED ACADEMIC RESOURCE', 0, fontSize * 0.65);
+
+      ctx.restore();
+
+      // 2. Micro Running Footer
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = '#475569';
+      ctx.font = `500 ${Math.max(8, Math.min(11, width * 0.016))}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('StudyMyte • Verified Student Learning Resource • www.studymyte.tech', width / 2, height - Math.max(8, height * 0.015));
+      ctx.restore();
+    } catch (e) {
+      // Non-fatal overlay
+    }
+  }
+
   function renderAllPages() {
     const container = document.getElementById('pdf-viewer-container');
     const scrollRoot = document.getElementById('doc-viewer-body');
@@ -12404,7 +12442,12 @@ function initContributionEventHandlers() {
                 canvasContext: ctx,
                 viewport: viewport
               };
-              page.render(renderContext);
+              const renderTask = page.render(renderContext);
+              if (renderTask && renderTask.promise) {
+                renderTask.promise.then(function () {
+                  drawStudyMyteViewerWatermark(ctx, canvas.width, canvas.height);
+                }).catch(function () {});
+              }
             });
           }
         }
