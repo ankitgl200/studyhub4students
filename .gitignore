@@ -21,6 +21,7 @@ backend/serviceAccountKey.json
 dist/
 build/
 temp/
+scratch/
 backend/temp/
 backend/uploads/*
 !backend/uploads/.gitkeep

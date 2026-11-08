@@ -1,4 +1,4 @@
-const CACHE_NAME = 'studymyte-pwa-v10';
+const CACHE_NAME = 'studymyte-pwa-v11';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -6,7 +6,8 @@ const STATIC_ASSETS = [
   '/icon.png',
   '/logowht.png',
   '/logodrk.png',
-  '/modern.css'
+  '/style.css',
+  '/mytee.css'
 ];
 
 // Firebase Background Messaging setup inside Service Worker
