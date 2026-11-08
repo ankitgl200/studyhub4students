@@ -14278,9 +14278,7 @@ async function loadSuperAdminStorageStats() {
     const token = localStorage.getItem('token');
     const res = await fetch(`${API_BASE}/admin/security/storage-stats?_t=${Date.now()}`, {
       headers: {
-        'Authorization': 'Bearer ' + token,
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache'
+        'Authorization': 'Bearer ' + token
       }
     });
 
