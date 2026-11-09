@@ -156,10 +156,10 @@ const api = {
     return res;
   },
 
-  async signup(name, phone, email, password, role) {
+  async signup(name, phone, email, password, role, agreedToTerms = true) {
     const res = await request('/auth/signup', {
       method: 'POST',
-      body: { name, phone, email, password, role }
+      body: { name, phone, email, password, role, agreedToTerms }
     });
     if (res.token) {
       localStorage.setItem('token', res.token);
@@ -3359,10 +3359,22 @@ function showTermsModal() {
     modal.style.display = 'flex';
     const closeBtn = document.getElementById('modal-terms-close');
     const footerBtn = document.getElementById('btn-terms-close-footer');
+    const acceptBtn = document.getElementById('btn-terms-accept');
     const closeFn = () => { modal.style.display = 'none'; };
     if (closeBtn) closeBtn.onclick = closeFn;
     if (footerBtn) footerBtn.onclick = closeFn;
+    if (acceptBtn) {
+      acceptBtn.onclick = () => {
+        const chk = document.getElementById('signup-terms-agree');
+        if (chk) {
+          chk.checked = true;
+          chk.dispatchEvent(new Event('change'));
+        }
+        closeFn();
+      };
+    }
     modal.onclick = (e) => { if (e.target === modal) closeFn(); };
+    refreshIcons();
   }
 }
 
@@ -3372,10 +3384,22 @@ function showPrivacyModal() {
     modal.style.display = 'flex';
     const closeBtn = document.getElementById('modal-privacy-close');
     const footerBtn = document.getElementById('btn-privacy-close-footer');
+    const acceptBtn = document.getElementById('btn-privacy-accept');
     const closeFn = () => { modal.style.display = 'none'; };
     if (closeBtn) closeBtn.onclick = closeFn;
     if (footerBtn) footerBtn.onclick = closeFn;
+    if (acceptBtn) {
+      acceptBtn.onclick = () => {
+        const chk = document.getElementById('signup-terms-agree');
+        if (chk) {
+          chk.checked = true;
+          chk.dispatchEvent(new Event('change'));
+        }
+        closeFn();
+      };
+    }
     modal.onclick = (e) => { if (e.target === modal) closeFn(); };
+    refreshIcons();
   }
 }
 
@@ -9723,13 +9747,24 @@ function initEventHandlers() {
     if (!email || !emailRegex.test(email)) {
       errorAlert.textContent = 'Please enter a valid email address (e.g. example@gmail.com)';
       errorAlert.style.display = 'block';
-      btnContent.innerHTML = '<i data-lucide="user-plus" style="width:18px;height:18px;"></i> Register';
+      btnContent.innerHTML = '<i data-lucide="user-plus" style="width:18px;height:18px;"></i> Complete Registration';
       refreshIcons();
       return;
     }
 
+    // Terms & Privacy Acceptance Validation
+    const termsCheckbox = document.getElementById('signup-terms-agree');
+    if (termsCheckbox && !termsCheckbox.checked) {
+      errorAlert.textContent = 'Please read and agree to the Terms of Service and Privacy Policy to register.';
+      errorAlert.style.display = 'block';
+      btnContent.innerHTML = '<i data-lucide="user-plus" style="width:18px;height:18px;"></i> Complete Registration';
+      refreshIcons();
+      termsCheckbox.focus();
+      return;
+    }
+
     try {
-      const res = await api.signup(name, phone, email, password, role);
+      const res = await api.signup(name, phone, email, password, role, true);
       if (res.requiresApproval) {
         successText.textContent = res.message;
         successAlert.style.display = 'flex';
@@ -9746,8 +9781,31 @@ function initEventHandlers() {
       errorAlert.textContent = err.message || 'Failed to sign up';
       errorAlert.style.display = 'block';
     } finally {
-      btnContent.innerHTML = '<i data-lucide="user-plus" style="width:18px;height:18px;"></i> Register';
+      btnContent.innerHTML = '<i data-lucide="user-plus" style="width:18px;height:18px;"></i> Complete Registration';
       refreshIcons();
+    }
+  });
+
+  // Bind direct Terms & Privacy modal open links
+  const termsLinkIds = ['link-signup-terms', 'link-signup-footer-terms', 'link-login-footer-terms'];
+  termsLinkIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        showTermsModal();
+      });
+    }
+  });
+
+  const privacyLinkIds = ['link-signup-privacy', 'link-signup-footer-privacy', 'link-login-footer-privacy'];
+  privacyLinkIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        showPrivacyModal();
+      });
     }
   });
 
