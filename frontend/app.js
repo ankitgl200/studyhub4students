@@ -1404,21 +1404,8 @@ async function router() {
     document.getElementById('view-resources').style.display = 'block';
     await renderResourcesView();
   } else if (cleanPath.startsWith('/admin')) {
-    const isMobile = window.innerWidth <= 768;
-    if (!isMobile) {
-      if (cleanPath === '/admin/approvals') {
-        return navigate('/admin?tab=pending');
-      } else if (cleanPath === '/admin/users') {
-        return navigate('/admin?tab=users');
-      } else if (cleanPath === '/admin/reviews') {
-        return navigate('/admin?tab=reviews');
-      } else if (cleanPath === '/admin/contributions' || cleanPath === '/admin/support' || cleanPath === '/admin/notifications') {
-        return navigate('/admin');
-      }
-    } else {
-      if (cleanPath === '/admin' || cleanPath === '/admin/') {
-        return navigate('/admin/approvals');
-      }
+    if (cleanPath === '/admin' || cleanPath === '/admin/') {
+      return navigate('/admin/approvals');
     }
     directoryVisibleCount = 5;
     helpRequestsVisibleCount = 5;
@@ -1503,6 +1490,9 @@ async function router() {
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+
+  // Render bottom responsive advertisement on current page (Admin panel is strictly excluded)
+  renderSiteAds();
 
   refreshIcons();
 }
@@ -3274,6 +3264,10 @@ function renderProfileView() {
             <div class="item-left"><i data-lucide="star" style="color: var(--danger);"></i><span>User Reviews</span></div>
             <i data-lucide="chevron-right" class="arrow-right"></i>
           </a>
+          <a href="#/admin/ads" class="profile-menu-item">
+            <div class="item-left"><i data-lucide="megaphone" style="color: #10b981;"></i><span style="color: #10b981; font-weight: 600;">Ad &amp; Monetization Control</span></div>
+            <i data-lucide="chevron-right" class="arrow-right"></i>
+          </a>
       `;
     } else {
       html += `
@@ -3305,6 +3299,10 @@ function renderProfileView() {
           </a>
           <a href="#/admin?tab=reviews" class="profile-menu-item">
             <div class="item-left"><i data-lucide="star" style="color: var(--danger);"></i><span>User Reviews</span></div>
+            <i data-lucide="chevron-right" class="arrow-right"></i>
+          </a>
+          <a href="#/admin?tab=ads" class="profile-menu-item">
+            <div class="item-left"><i data-lucide="megaphone" style="color: #10b981;"></i><span style="color: #10b981; font-weight: 600;">Ad &amp; Monetization</span></div>
             <i data-lucide="chevron-right" class="arrow-right"></i>
           </a>
       `;
@@ -3980,6 +3978,147 @@ async function renderAdminDashboardView(currentHash) {
     currentHash = '/admin/approvals';
   }
 
+const ADMIN_TABS_CONFIG = {
+  approvals: {
+    sectionId: 'admin-section-approvals',
+    title: 'Pending Approvals',
+    route: '/admin/approvals'
+  },
+  users: {
+    sectionId: 'admin-section-users',
+    title: 'User Directory',
+    route: '/admin/users'
+  },
+  contributions: {
+    sectionId: 'admin-section-contributions',
+    title: 'Pending Contributions',
+    route: '/admin/contributions'
+  },
+  support: {
+    sectionId: 'admin-section-support',
+    title: 'Help & Support Requests',
+    route: '/admin/support'
+  },
+  compose: {
+    sectionId: 'admin-section-compose-notification',
+    title: 'Send Notification',
+    route: '/admin/compose'
+  },
+  notifications: {
+    sectionId: 'admin-section-notifications',
+    title: 'Sent Notifications',
+    route: '/admin/notifications'
+  },
+  security: {
+    sectionId: 'admin-section-security',
+    title: 'Unusual Activity Reports',
+    route: '/admin/security'
+  },
+  reviews: {
+    sectionId: 'admin-section-reviews',
+    title: 'User Reviews',
+    route: '/admin/reviews'
+  },
+  ads: {
+    sectionId: 'admin-section-ads',
+    title: 'Ad & Monetization Control',
+    route: '/admin/ads'
+  },
+  storage: {
+    sectionId: 'superadmin-section-storage',
+    title: 'Cloud & Database Capacity',
+    route: '/admin/storage',
+    superadminOnly: true
+  }
+};
+
+let _adminTabsBound = false;
+let _currentAdminTab = 'approvals';
+
+function switchAdminTab(tabKey, updateHash = true) {
+  // Normalize aliases
+  if (tabKey === 'pending') tabKey = 'approvals';
+  if (tabKey === 'duplicates') tabKey = 'contributions';
+
+  // Permission check for superadmin only tab
+  if (tabKey === 'storage' && (!currentUser || currentUser.role !== 'superadmin')) {
+    tabKey = 'approvals';
+  }
+
+  if (!ADMIN_TABS_CONFIG[tabKey]) {
+    tabKey = 'approvals';
+  }
+
+  _currentAdminTab = tabKey;
+  const config = ADMIN_TABS_CONFIG[tabKey];
+
+  // 1. Hide ALL admin subviews
+  document.querySelectorAll('.admin-subview').forEach(view => {
+    view.style.display = 'none';
+  });
+
+  // 2. Show ONLY the selected tab section
+  const targetSection = document.getElementById(config.sectionId);
+  if (targetSection) {
+    targetSection.style.display = 'block';
+  }
+
+  // 3. Highlight the active tab button in the tab bar
+  document.querySelectorAll('.admin-nav-tab-btn').forEach(btn => {
+    const isActive = btn.dataset.tabId === tabKey;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+
+  // 4. Update the breadcrumbs subtitle
+  const subpageTitle = document.getElementById('admin-panel-subpage-title');
+  if (subpageTitle) {
+    subpageTitle.textContent = config.title;
+    subpageTitle.style.display = 'inline';
+    if (subpageTitle.previousElementSibling) {
+      subpageTitle.previousElementSibling.style.display = 'inline';
+    }
+  }
+
+  // 5. Update browser URL hash cleanly without full reload
+  if (updateHash) {
+    const newHash = '#' + config.route;
+    if (window.location.hash !== newHash) {
+      window.history.replaceState(null, '', newHash);
+    }
+  }
+
+  // 6. Automatically trigger specific section data loaders
+  if (tabKey === 'storage') {
+    if (typeof loadSuperAdminStorageStats === 'function') loadSuperAdminStorageStats();
+  } else if (tabKey === 'ads') {
+    if (typeof loadAdminAdsSettings === 'function') loadAdminAdsSettings();
+  } else if (tabKey === 'security') {
+    if (typeof loadAdminSecurityReports === 'function') loadAdminSecurityReports();
+  }
+
+  refreshIcons();
+}
+
+function bindAdminNavTabs() {
+  if (_adminTabsBound) return;
+  _adminTabsBound = true;
+
+  const tabContainer = document.getElementById('admin-navigation-tabs');
+  if (!tabContainer) return;
+
+  tabContainer.addEventListener('click', (e) => {
+    const btn = e.target.closest('.admin-nav-tab-btn');
+    if (!btn) return;
+
+    e.preventDefault();
+    const tabId = btn.dataset.tabId;
+    if (tabId) {
+      switchAdminTab(tabId, true);
+    }
+  });
+}
+
   const roleLabel = document.getElementById('admin-panel-role-label');
   const errorAlert = document.getElementById('admin-error-alert');
   const pendingCount = document.getElementById('pending-users-count');
@@ -3998,82 +4137,30 @@ async function renderAdminDashboardView(currentHash) {
     errorAlert.style.display = 'none';
   }
 
-  // Handle visibility of the sub-view containers based on Mobile vs PC viewport
-  const isMobile = window.innerWidth <= 768;
-  const pcSep = subpageTitle ? subpageTitle.previousElementSibling : null;
-
-  if (isMobile) {
-    if (pcSep) pcSep.style.display = 'inline';
-    if (subpageTitle) subpageTitle.style.display = 'inline';
-
-    document.querySelectorAll('.admin-subview').forEach(view => {
-      view.style.display = 'none';
-    });
-
-    if (currentHash === '/admin/approvals') {
-      if (subpageTitle) subpageTitle.textContent = 'Pending Approvals';
-      const view = document.getElementById('admin-section-approvals');
-      if (view) view.style.display = 'block';
-    } else if (currentHash === '/admin/users') {
-      if (subpageTitle) subpageTitle.textContent = 'User Directory';
-      const view = document.getElementById('admin-section-users');
-      if (view) view.style.display = 'block';
-    } else if (currentHash === '/admin/contributions') {
-      if (subpageTitle) subpageTitle.textContent = 'Pending Contributions';
-      const view = document.getElementById('admin-section-contributions');
-      if (view) view.style.display = 'block';
-    } else if (currentHash === '/admin/duplicates') {
-      if (subpageTitle) subpageTitle.textContent = 'Pending Contributions & Duplicates';
-      const view = document.getElementById('admin-section-contributions');
-      if (view) view.style.display = 'block';
-    } else if (currentHash === '/admin/support') {
-      if (subpageTitle) subpageTitle.textContent = 'Help & Support';
-      const view = document.getElementById('admin-section-support');
-      if (view) view.style.display = 'block';
-    } else if (currentHash === '/admin/compose') {
-      if (subpageTitle) subpageTitle.textContent = 'Send Notification';
-      const view = document.getElementById('admin-section-compose-notification');
-      if (view) view.style.display = 'block';
-    } else if (currentHash === '/admin/notifications') {
-      if (subpageTitle) subpageTitle.textContent = 'Sent Notifications';
-      const view = document.getElementById('admin-section-notifications');
-      if (view) view.style.display = 'block';
-    } else if (currentHash === '/admin/security' || currentHash === '/admin?tab=security') {
-      if (subpageTitle) subpageTitle.textContent = 'Unusual Activity Reports';
-      const view = document.getElementById('admin-section-security');
-      if (view) view.style.display = 'block';
-    } else if (currentHash === '/admin/storage' || currentHash === '/admin?tab=storage') {
-      if (subpageTitle) subpageTitle.textContent = 'Cloud & Database Capacity';
-      const view = document.getElementById('superadmin-section-storage');
-      if (view) view.style.display = 'block';
-    } else if (currentHash === '/admin/reviews') {
-      if (subpageTitle) subpageTitle.textContent = 'User Reviews';
-      const view = document.getElementById('admin-section-reviews');
-      if (view) view.style.display = 'block';
-    }
-  } else {
-    if (pcSep) pcSep.style.display = 'none';
-    if (subpageTitle) subpageTitle.style.display = 'none';
-
-    document.querySelectorAll('.admin-subview').forEach(view => {
-      view.style.display = 'block';
-    });
+  // Superadmin storage tab visibility in the tab bar
+  const storageTabBtn = document.getElementById('admin-tab-btn-storage');
+  if (storageTabBtn) {
+    storageTabBtn.style.display = (currentUser && currentUser.role === 'superadmin') ? 'inline-flex' : 'none';
   }
 
-  // Hide superadmin storage section if current user is not a superadmin
-  const storageSection = document.getElementById('superadmin-section-storage');
-  if (storageSection) {
-    if (currentUser && currentUser.role === 'superadmin') {
-      if (!isMobile || currentHash === '/admin/storage' || currentHash === '/admin?tab=storage') {
-        storageSection.style.display = 'block';
-        loadSuperAdminStorageStats();
-      }
-    } else {
-      storageSection.style.display = 'none';
-    }
+  // Bind tab bar buttons
+  bindAdminNavTabs();
+
+  // Determine initial active tab from route or query params
+  let initialTab = 'approvals';
+  const queryParams = (typeof getHashQueryParams === 'function') ? getHashQueryParams() : {};
+  if (queryParams.tab) {
+    initialTab = queryParams.tab;
+  } else if (currentHash.includes('/admin/')) {
+    const subRoute = currentHash.replace('/admin/', '').split('?')[0];
+    if (subRoute) initialTab = subRoute;
   }
+
+  // Switch to the target tab (showing only that tab!)
+  switchAdminTab(initialTab, false);
 
   loadAdminSecurityReports();
+  loadAdminAdsSettings();
   const adminSearchInput = document.getElementById('admin-user-search-input');
   const adminSearchClearBtn = document.getElementById('btn-admin-user-search-clear');
   if (adminSearchInput && adminSearchClearBtn) {
@@ -4099,6 +4186,10 @@ async function renderAdminDashboardView(currentHash) {
       pendingContainer.innerHTML = getListSkeleton();
       const pending = await api.getPendingUsers();
       pendingCount.textContent = pending.length;
+      const tabApprovalsBadge = document.getElementById('admin-tab-approvals-badge');
+      if (tabApprovalsBadge) tabApprovalsBadge.textContent = pending.length;
+      const tabApprovalsDot = document.getElementById('admin-alert-dot-approvals');
+      if (tabApprovalsDot) tabApprovalsDot.style.display = pending.length > 0 ? 'block' : 'none';
 
       if (pending.length === 0) {
         pendingContainer.innerHTML = `<div class="empty-state" style="padding: 30px;">No registration requests pending approval.</div>`;
@@ -4139,6 +4230,10 @@ async function renderAdminDashboardView(currentHash) {
                   if (pendingCount) {
                     const cnt = Math.max(0, (parseInt(pendingCount.textContent, 10) || 1) - 1);
                     pendingCount.textContent = cnt;
+                    const tabApprovalsBadge = document.getElementById('admin-tab-approvals-badge');
+                    if (tabApprovalsBadge) tabApprovalsBadge.textContent = cnt;
+                    const tabApprovalsDot = document.getElementById('admin-alert-dot-approvals');
+                    if (tabApprovalsDot) tabApprovalsDot.style.display = cnt > 0 ? 'block' : 'none';
                   }
                   if (pendingContainer && pendingContainer.querySelectorAll('.user-card').length === 0) {
                     pendingContainer.innerHTML = `<div class="empty-state" style="padding: 30px;">No registration requests pending approval.</div>`;
@@ -4173,6 +4268,10 @@ async function renderAdminDashboardView(currentHash) {
                   if (pendingCount) {
                     const cnt = Math.max(0, (parseInt(pendingCount.textContent, 10) || 1) - 1);
                     pendingCount.textContent = cnt;
+                    const tabApprovalsBadge = document.getElementById('admin-tab-approvals-badge');
+                    if (tabApprovalsBadge) tabApprovalsBadge.textContent = cnt;
+                    const tabApprovalsDot = document.getElementById('admin-alert-dot-approvals');
+                    if (tabApprovalsDot) tabApprovalsDot.style.display = cnt > 0 ? 'block' : 'none';
                   }
                   if (pendingContainer && pendingContainer.querySelectorAll('.user-card').length === 0) {
                     pendingContainer.innerHTML = `<div class="empty-state" style="padding: 30px;">No registration requests pending approval.</div>`;
@@ -4501,6 +4600,13 @@ async function renderAdminDashboardView(currentHash) {
         try {
           const tickets = await api.getHelpRequests();
           helpRequestsCount.textContent = tickets.length;
+
+          // Check for unresolved pending support requests
+          const pendingTickets = tickets.filter(t => t.status !== 'resolved');
+          const tabSupportDot = document.getElementById('admin-alert-dot-support');
+          if (tabSupportDot) {
+            tabSupportDot.style.display = pendingTickets.length > 0 ? 'block' : 'none';
+          }
 
           if (tickets.length === 0) {
             helpRequestsContainer.innerHTML = '<div class="empty-state">No support requests submitted yet.</div>';
@@ -5041,58 +5147,23 @@ async function renderAdminDashboardView(currentHash) {
       }
     };
 
-    // Execute fetches depending on isMobile vs Desktop View
-    if (!isMobile) {
-      // Desktop: Fetch and display EVERYTHING in parallel
-      await Promise.all([
-        fetchApprovals(),
-        fetchUsers(),
-        fetchContributions(),
-        fetchSupport(),
-        fetchComposeNotificationUsers(),
-        fetchNotifications(),
-        fetchReviews()
-      ]);
-    } else {
-      // Mobile: Fetch ONLY the active section's data
-      if (currentHash === '/admin/approvals') {
-        await fetchApprovals();
-      } else if (currentHash === '/admin/users') {
-        await fetchUsers();
-      } else if (currentHash === '/admin/contributions' || currentHash === '/admin/duplicates') {
-        await fetchContributions();
-      } else if (currentHash === '/admin/support') {
-        await fetchSupport();
-      } else if (currentHash === '/admin/compose') {
-        await fetchComposeNotificationUsers();
-      } else if (currentHash === '/admin/notifications') {
-        await fetchNotifications();
-      } else if (currentHash === '/admin/reviews') {
-        await fetchReviews();
-      }
-    }
+    // Fetch all admin sections in parallel so data for every tab is immediately ready
+    await Promise.all([
+      fetchApprovals(),
+      fetchUsers(),
+      fetchContributions(),
+      fetchSupport(),
+      fetchComposeNotificationUsers(),
+      fetchNotifications(),
+      fetchReviews()
+    ]);
 
-    // Scroll to query-params (only on PC / Desktop)
-    if (!isMobile) {
-      setTimeout(() => {
-        const params = getHashQueryParams();
-        if (params.tab === 'users') {
-          const directorySection = document.getElementById('admin-user-search-input');
-          if (directorySection) directorySection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } else if (params.tab === 'pending') {
-          const pendingSection = document.getElementById('pending-users-list-container');
-          if (pendingSection) pendingSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } else if (params.tab === 'compose') {
-          const composeSection = document.getElementById('admin-section-compose-notification');
-          if (composeSection) composeSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } else if (params.tab === 'reviews') {
-          const reviewsSection = document.getElementById('admin-reviews-list-container');
-          if (reviewsSection) reviewsSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } else if (params.tab === 'duplicates' || params.tab === 'contributions') {
-          const contSection = document.getElementById('admin-section-contributions');
-          if (contSection) contSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }, 150);
+    // Sync tab with query params if specified
+    if (typeof getHashQueryParams === 'function') {
+      const params = getHashQueryParams();
+      if (params.tab) {
+        switchAdminTab(params.tab, false);
+      }
     }
 
     refreshIcons();
@@ -11864,6 +11935,10 @@ async function renderPendingContributions() {
 
     // Total count of pending contributions
     if (pendingDocsCount) pendingDocsCount.textContent = pendingDocs.length;
+    const tabContribDot = document.getElementById('admin-alert-dot-contributions');
+    if (tabContribDot) {
+      tabContribDot.style.display = pendingDocs.length > 0 ? 'block' : 'none';
+    }
 
     if (pendingDocs.length === 0) {
       if (clustersWrapper) clustersWrapper.style.display = 'none';
@@ -14686,6 +14761,15 @@ async function loadAdminSecurityReports() {
 
     securityReportsList = data.reports || [];
     if (countBadge) countBadge.textContent = securityReportsList.length;
+    const tabSecBadge = document.getElementById('admin-tab-security-badge');
+    if (tabSecBadge) {
+      tabSecBadge.textContent = securityReportsList.length;
+      tabSecBadge.style.display = securityReportsList.length > 0 ? 'inline-flex' : 'none';
+    }
+    const tabSecDot = document.getElementById('admin-alert-dot-security');
+    if (tabSecDot) {
+      tabSecDot.style.display = securityReportsList.length > 0 ? 'block' : 'none';
+    }
 
     renderAdminSecurityReports(securityReportsList);
   } catch (err) {
@@ -15218,6 +15302,615 @@ async function reportClientSecurityTamper(type, details, payload) {
     }
   } catch (err) {
     console.error('Tamper reporting error:', err);
+  }
+}
+
+// ==========================================================================
+// Centralized Responsive Site Advertisement Engine & Admin Management (Up to 4 Ads)
+// ==========================================================================
+
+let _siteAdsConfig = null;
+let _siteAdsControlsBound = false;
+let _siteAdsGlobalDelegated = false;
+let _activeAdminSlotIndex = 0; // 0, 1, 2, or 3
+let _activeSiteAdIndex = 0;    // Currently active tab on user-facing pages
+
+const DEFAULT_AD_SLOTS = [
+  {
+    id: 1,
+    name: 'Ad 1',
+    enabled: true,
+    format: 'html',
+    title: 'Google AdSense',
+    description: 'Official Partner Advertisement',
+    imageUrl: '',
+    linkUrl: '',
+    buttonText: '',
+    htmlCode: '<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1950443996388582" crossorigin="anonymous"></script>\n<ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-1950443996388582" data-ad-slot="6380389639" data-ad-format="auto" data-full-width-responsive="true"></ins>\n<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>'
+  },
+  {
+    id: 2,
+    name: 'Ad 2',
+    enabled: false,
+    format: 'banner',
+    title: 'Partner with StudyMyte',
+    description: 'Reach thousands of verified engineering students and faculty. Promote your educational tools, hackathons, and courses.',
+    imageUrl: '',
+    linkUrl: 'mailto:support@studymyte.tech?subject=Sponsorship%20Inquiry',
+    buttonText: 'Advertise With Us',
+    htmlCode: ''
+  },
+  {
+    id: 3,
+    name: 'Ad 3',
+    enabled: false,
+    format: 'banner',
+    title: 'Master Data Structures & Algorithms',
+    description: 'Curated semester revision materials, interview cheat sheets, and coding resources for students.',
+    imageUrl: '',
+    linkUrl: 'https://studymyte.tech',
+    buttonText: 'Explore Resources ➔',
+    htmlCode: ''
+  },
+  {
+    id: 4,
+    name: 'Ad 4',
+    enabled: false,
+    format: 'banner',
+    title: 'Join Our Contributor Community',
+    description: 'Share your hand-written lecture notes and previous year papers to help your peers and earn badges.',
+    imageUrl: '',
+    linkUrl: 'https://studymyte.tech/#/my-contributions',
+    buttonText: 'Upload Notes ➔',
+    htmlCode: ''
+  }
+];
+
+function normalizeAdsConfig(raw) {
+  if (!raw || typeof raw !== 'object') {
+    raw = { enabled: false, ads: [] };
+  }
+  const enabled = !!raw.enabled;
+  let rawAds = Array.isArray(raw.ads) ? raw.ads : [];
+
+  // Migration from older single-ad structure
+  if (rawAds.length === 0 && (raw.title || raw.htmlCode || raw.format)) {
+    rawAds.push({
+      id: 1,
+      name: 'Ad 1',
+      enabled: true,
+      format: raw.format || 'banner',
+      title: raw.title || '',
+      description: raw.description || '',
+      imageUrl: raw.imageUrl || '',
+      linkUrl: raw.linkUrl || '',
+      buttonText: raw.buttonText || '',
+      htmlCode: raw.htmlCode || ''
+    });
+  }
+
+  const normalized = [];
+  for (let i = 0; i < 4; i++) {
+    const existing = rawAds[i] || {};
+    const def = DEFAULT_AD_SLOTS[i];
+    normalized.push({
+      id: i + 1,
+      name: (existing.name && existing.name.trim()) ? existing.name.trim() : def.name,
+      enabled: existing.enabled !== undefined ? !!existing.enabled : def.enabled,
+      format: (existing.format === 'html') ? 'html' : 'banner',
+      title: existing.title !== undefined ? existing.title : def.title,
+      description: existing.description !== undefined ? existing.description : def.description,
+      imageUrl: existing.imageUrl !== undefined ? existing.imageUrl : def.imageUrl,
+      linkUrl: existing.linkUrl !== undefined ? existing.linkUrl : def.linkUrl,
+      buttonText: existing.buttonText !== undefined ? existing.buttonText : def.buttonText,
+      htmlCode: existing.htmlCode !== undefined ? existing.htmlCode : def.htmlCode
+    });
+  }
+
+  return { enabled, ads: normalized };
+}
+
+async function fetchAdsConfig(force = false) {
+  if (_siteAdsConfig && !force) return _siteAdsConfig;
+  try {
+    const res = await api.getSetting('ads_config');
+    if (res && res.value) {
+      _siteAdsConfig = normalizeAdsConfig(res.value);
+    } else {
+      _siteAdsConfig = normalizeAdsConfig({ enabled: false, ads: DEFAULT_AD_SLOTS });
+    }
+  } catch (err) {
+    _siteAdsConfig = normalizeAdsConfig({ enabled: false, ads: DEFAULT_AD_SLOTS });
+  }
+  return _siteAdsConfig;
+}
+
+function buildSingleAdBodyHTML(ad) {
+  if (!ad) return '';
+
+  if (ad.format === 'html' && ad.htmlCode) {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const isAdSense = ad.htmlCode.includes('adsbygoogle');
+
+    return `
+      <div class="site-ad-custom-html" style="overflow-x: auto; min-height: 90px; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%;">
+        ${ad.htmlCode}
+        ${(isLocal && isAdSense) ? `
+          <div style="background: rgba(37,99,235,0.06); border: 1px dashed var(--primary); border-radius: 8px; padding: 14px 18px; text-align: center; width: 100%; margin-top: 8px;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--primary); font-weight: 700; font-size: 13px;">
+              <i data-lucide="layout-grid" style="width: 16px; height: 16px;"></i> Google AdSense Connected (Live on studymyte.tech)
+            </div>
+            <p style="margin: 3px 0 0 0; font-size: 11px; color: var(--text-muted);">
+              Publisher: <code>ca-pub-1950443996388582</code> • Slot: <code>6380389639</code><br>
+              <em>Google AdSense serves live commercial banners on your approved production domain (studymyte.tech).</em>
+            </p>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  const title = escapeHTML(ad.title || 'Partner with StudyMyte');
+  const desc = escapeHTML(ad.description || 'Reach thousands of verified engineering scholars and faculty.');
+  const btnText = escapeHTML(ad.buttonText || 'Learn More ➔');
+  const linkUrl = ad.linkUrl ? escapeHTML(ad.linkUrl) : 'mailto:support@studymyte.tech';
+  const imgUrl = ad.imageUrl ? escapeHTML(ad.imageUrl) : '';
+
+  return `
+    <div class="site-ad-body">
+      ${imgUrl ? `
+        <div class="site-ad-media">
+          <img src="${imgUrl}" alt="${title}" loading="lazy" onerror="this.parentElement.style.display='none';" />
+        </div>
+      ` : `
+        <div class="site-ad-media" style="background: linear-gradient(135deg, rgba(37,99,235,0.12) 0%, rgba(16,185,129,0.12) 100%);">
+          <i data-lucide="award" style="width: 32px; height: 32px; color: var(--primary);"></i>
+        </div>
+      `}
+      <div class="site-ad-content">
+        <h4 class="site-ad-title">${title}</h4>
+        <p class="site-ad-desc">${desc}</p>
+      </div>
+      <div class="site-ad-action">
+        <a href="${linkUrl}" target="_blank" rel="noopener noreferrer sponsored" class="btn btn-primary site-ad-btn">
+          <span>${btnText}</span>
+          <i data-lucide="external-link" style="width: 14px; height: 14px;"></i>
+        </a>
+      </div>
+    </div>
+  `;
+}
+
+function buildSingleAdCardHTML(ad, idx) {
+  if (!ad) return '';
+
+  return `
+    <div class="site-ad-card" data-ad-slot-id="${ad.id || (idx + 1)}">
+      <div class="site-ad-header" style="display: flex; align-items: center; justify-content: flex-start;">
+        <span class="site-ad-badge">
+          <i data-lucide="sparkles" style="width: 12px; height: 12px;"></i> ADVERTISEMENT
+        </span>
+      </div>
+      <div class="site-ad-current-slot-wrap">
+        ${buildSingleAdBodyHTML(ad)}
+      </div>
+    </div>
+  `;
+}
+
+function buildAdCardHTML(config) {
+  if (!config) return '';
+  const activeAds = (config.ads || []).filter(a => a && a.enabled);
+  if (activeAds.length === 0) return '';
+
+  return `
+    <div class="site-ads-stack">
+      ${activeAds.map((ad, idx) => buildSingleAdCardHTML(ad, idx)).join('')}
+    </div>
+  `;
+}
+
+async function renderSiteAds(force = false) {
+  const config = await fetchAdsConfig(force);
+
+  // Always clean up any stray ad elements inside login/auth/admin views
+  const authView = document.getElementById('view-login');
+  if (authView) authView.querySelectorAll('.site-ad-slot-wrapper').forEach(el => el.remove());
+  const forgotView = document.getElementById('view-forgot-password');
+  if (forgotView) forgotView.querySelectorAll('.site-ad-slot-wrapper').forEach(el => el.remove());
+  const resetView = document.getElementById('view-reset-password');
+  if (resetView) resetView.querySelectorAll('.site-ad-slot-wrapper').forEach(el => el.remove());
+
+  // Find currently active page view
+  const activeView = Array.from(document.querySelectorAll('.page-view'))
+    .find(v => v.style.display !== 'none');
+
+  if (!activeView) return;
+
+  // Strict Excluded Views: Login, Signup, Forgot/Reset Password, and Admin Panel
+  const EXCLUDED_AD_VIEWS = [
+    'view-admin',
+    'view-login',
+    'view-signup',
+    'view-forgot-password',
+    'view-reset-password',
+    'view-loading'
+  ];
+
+  if (EXCLUDED_AD_VIEWS.includes(activeView.id)) {
+    activeView.querySelectorAll('.site-ad-slot-wrapper').forEach(el => el.remove());
+    return;
+  }
+
+  // Check current URL hash/pathname for auth or admin routes
+  const currentPath = (window.location.hash || window.location.pathname || '').toLowerCase();
+  if (
+    currentPath.includes('/login') ||
+    currentPath.includes('/signup') ||
+    currentPath.includes('/forgot-password') ||
+    currentPath.includes('/reset-password') ||
+    currentPath.includes('/admin')
+  ) {
+    return;
+  }
+
+  // Strict Whitelist of Allowed Content Views:
+  const ALLOWED_AD_VIEWS = [
+    'view-home',
+    'view-notes',
+    'view-papers',
+    'view-resources',
+    'view-my-uploads',
+    'view-teacher-dashboard',
+    'view-my-contributions',
+    'view-contributors',
+    'view-profile',
+    'view-appearance',
+    'view-about',
+    'view-support',
+    'view-reviews'
+  ];
+
+  if (!ALLOWED_AD_VIEWS.includes(activeView.id)) {
+    return;
+  }
+
+  const activeAds = (config?.ads || []).filter(a => a && a.enabled);
+
+  // If master switch is OFF or 0 ads are enabled
+  if (!config || !config.enabled || activeAds.length === 0) {
+    document.querySelectorAll('.site-ad-slot-wrapper').forEach(slot => {
+      slot.style.display = 'none';
+      slot.innerHTML = '';
+    });
+    return;
+  }
+
+  // Look for ad slot in active view
+  let slot = activeView.querySelector('.site-ad-slot-wrapper');
+  if (!slot) {
+    slot = document.createElement('div');
+    slot.className = 'site-ad-slot-wrapper';
+    slot.style.marginTop = '32px';
+    slot.style.marginBottom = '24px';
+    const container = activeView.querySelector('.page-container') || activeView;
+    container.appendChild(slot);
+  }
+
+  slot.style.display = 'block';
+  slot.innerHTML = buildAdCardHTML(config);
+
+  // Trigger push notification for any active Google AdSense units
+  activeAds.forEach(ad => {
+    if (ad && ad.format === 'html' && ad.htmlCode && ad.htmlCode.includes('adsbygoogle')) {
+      try {
+        if (typeof window.adsbygoogle !== 'undefined') {
+          (window.adsbygoogle = window.adsbygoogle || []).push({});
+        }
+      } catch (adsErr) {
+        console.log('[AdSense] Push notification:', adsErr);
+      }
+    }
+  });
+
+  refreshIcons();
+}
+
+async function loadAdminAdsSettings() {
+  const masterToggle = document.getElementById('admin-ads-enabled-toggle');
+  if (!masterToggle) return;
+
+  const config = await fetchAdsConfig(true);
+
+  // Populate master toggle
+  masterToggle.checked = !!config.enabled;
+
+  // Update status pill
+  updateAdminAdsStatusPill(masterToggle.checked);
+
+  // Render 4 slot tabs in admin
+  renderAdminSlotTabs();
+
+  // Populate form for active slot
+  populateAdminSlotForm(_activeAdminSlotIndex);
+
+  // Render live preview box
+  updateAdminAdLivePreview();
+
+  // Bind controls once
+  if (!_siteAdsControlsBound) {
+    bindAdminAdsControls();
+    _siteAdsControlsBound = true;
+  }
+}
+
+function renderAdminSlotTabs() {
+  const tabsContainer = document.getElementById('admin-ad-slots-nav');
+  if (!tabsContainer || !_siteAdsConfig || !_siteAdsConfig.ads) return;
+
+  tabsContainer.querySelectorAll('.admin-ad-slot-tab').forEach((tabBtn, idx) => {
+    const slot = _siteAdsConfig.ads[idx] || DEFAULT_AD_SLOTS[idx];
+    if (!slot) return;
+
+    tabBtn.classList.toggle('active', idx === _activeAdminSlotIndex);
+    
+    const titleEl = tabBtn.querySelector('.admin-ad-tab-title');
+    if (titleEl) titleEl.textContent = slot.name || `Ad ${idx + 1}`;
+
+    const dotEl = tabBtn.querySelector('.admin-ad-tab-status-dot');
+    if (dotEl) dotEl.classList.toggle('active', !!slot.enabled);
+
+    const badgeEl = tabBtn.querySelector('.admin-ad-tab-badge');
+    if (badgeEl) badgeEl.textContent = slot.format === 'html' ? 'AdSense' : 'Banner';
+  });
+}
+
+function populateAdminSlotForm(slotIdx) {
+  if (!_siteAdsConfig || !_siteAdsConfig.ads) return;
+  const slot = _siteAdsConfig.ads[slotIdx] || DEFAULT_AD_SLOTS[slotIdx];
+  if (!slot) return;
+
+  const headingEl = document.getElementById('admin-slot-heading');
+  if (headingEl) {
+    headingEl.innerHTML = `<i data-lucide="edit-3" style="width: 16px; height: 16px; color: var(--primary);"></i> Configuring ${escapeHTML(slot.name || `Ad Slot ${slotIdx + 1}`)}`;
+  }
+
+  const slotToggle = document.getElementById('admin-slot-enabled-toggle');
+  const slotStatusLabel = document.getElementById('admin-slot-status-label');
+  if (slotToggle) {
+    slotToggle.checked = !!slot.enabled;
+  }
+  if (slotStatusLabel) {
+    slotStatusLabel.textContent = `Slot Status: ${slot.enabled ? 'ACTIVE (ON)' : 'INACTIVE (OFF)'}`;
+    slotStatusLabel.style.color = slot.enabled ? '#10b981' : 'var(--text-muted)';
+  }
+
+  const tabLabelInput = document.getElementById('admin-ad-tab-label');
+  if (tabLabelInput) tabLabelInput.value = slot.name || `Ad ${slotIdx + 1}`;
+
+  const titleInput = document.getElementById('admin-ad-title');
+  const btnTextInput = document.getElementById('admin-ad-btn-text');
+  const descInput = document.getElementById('admin-ad-desc');
+  const imgInput = document.getElementById('admin-ad-img');
+  const linkInput = document.getElementById('admin-ad-link');
+  const htmlInput = document.getElementById('admin-ad-html');
+
+  if (titleInput) titleInput.value = slot.title || '';
+  if (btnTextInput) btnTextInput.value = slot.buttonText || '';
+  if (descInput) descInput.value = slot.description || '';
+  if (imgInput) imgInput.value = slot.imageUrl || '';
+  if (linkInput) linkInput.value = slot.linkUrl || '';
+  if (htmlInput) htmlInput.value = slot.htmlCode || '';
+
+  setAdminAdFormat(slot.format || 'banner', false);
+  refreshIcons();
+}
+
+function syncCurrentSlotFromForm() {
+  if (!_siteAdsConfig || !_siteAdsConfig.ads) return;
+  const slot = _siteAdsConfig.ads[_activeAdminSlotIndex];
+  if (!slot) return;
+
+  const tabLabelInput = document.getElementById('admin-ad-tab-label');
+  const slotToggle = document.getElementById('admin-slot-enabled-toggle');
+  const titleInput = document.getElementById('admin-ad-title');
+  const btnTextInput = document.getElementById('admin-ad-btn-text');
+  const descInput = document.getElementById('admin-ad-desc');
+  const imgInput = document.getElementById('admin-ad-img');
+  const linkInput = document.getElementById('admin-ad-link');
+  const htmlInput = document.getElementById('admin-ad-html');
+
+  slot.name = (tabLabelInput?.value || '').trim() || `Ad ${_activeAdminSlotIndex + 1}`;
+  slot.enabled = !!slotToggle?.checked;
+  slot.format = _siteAdsSelectedFormat;
+  slot.title = (titleInput?.value || '').trim();
+  slot.buttonText = (btnTextInput?.value || '').trim();
+  slot.description = (descInput?.value || '').trim();
+  slot.imageUrl = (imgInput?.value || '').trim();
+  slot.linkUrl = (linkInput?.value || '').trim();
+  slot.htmlCode = (htmlInput?.value || '').trim();
+
+  renderAdminSlotTabs();
+}
+
+function updateAdminAdsStatusPill(isEnabled) {
+  const dot = document.getElementById('admin-ads-status-dot');
+  const text = document.getElementById('admin-ads-status-text');
+  const pill = document.getElementById('admin-ads-live-status-pill');
+  if (!dot || !text || !pill) return;
+
+  if (isEnabled) {
+    dot.style.background = '#10b981';
+    text.textContent = 'Ads Currently: ACTIVE (ON)';
+    text.style.color = '#10b981';
+    pill.style.background = 'rgba(16, 185, 129, 0.1)';
+    pill.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+  } else {
+    dot.style.background = '#94a3b8';
+    text.textContent = 'Ads Currently: INACTIVE (OFF)';
+    text.style.color = 'var(--text-muted)';
+    pill.style.background = 'rgba(100, 116, 139, 0.1)';
+    pill.style.borderColor = 'var(--border-color)';
+  }
+}
+
+function setAdminAdFormat(format, sync = true) {
+  _siteAdsSelectedFormat = format;
+  const bannerFields = document.getElementById('admin-ad-fields-banner');
+  const htmlFields = document.getElementById('admin-ad-fields-html');
+  const btnBanner = document.getElementById('btn-ad-format-banner');
+  const btnHtml = document.getElementById('btn-ad-format-html');
+
+  if (format === 'html') {
+    if (bannerFields) bannerFields.style.display = 'none';
+    if (htmlFields) htmlFields.style.display = 'block';
+    if (btnBanner) btnBanner.className = 'btn btn-sm btn-secondary';
+    if (btnHtml) btnHtml.className = 'btn btn-sm btn-primary';
+  } else {
+    if (bannerFields) bannerFields.style.display = 'block';
+    if (htmlFields) htmlFields.style.display = 'none';
+    if (btnBanner) btnBanner.className = 'btn btn-sm btn-primary';
+    if (btnHtml) btnHtml.className = 'btn btn-sm btn-secondary';
+  }
+
+  if (sync) {
+    syncCurrentSlotFromForm();
+    updateAdminAdLivePreview();
+  }
+}
+
+function updateAdminAdLivePreview() {
+  const previewBox = document.getElementById('admin-ad-live-preview-box');
+  if (!previewBox || !_siteAdsConfig) return;
+
+  syncCurrentSlotFromForm();
+
+  // Create temporary copy to preview even if master switch is off
+  const previewConfig = JSON.parse(JSON.stringify(_siteAdsConfig));
+  previewConfig.enabled = true; // force enabled for preview display
+
+  // Find index of current slot among active ads
+  const activeAds = previewConfig.ads.filter(a => a && a.enabled);
+  if (activeAds.length === 0) {
+    previewBox.innerHTML = `
+      <div style="padding: 24px; text-align: center; color: var(--text-muted); background: var(--card-bg); border-radius: 8px;">
+        <i data-lucide="info" style="width: 24px; height: 24px; color: var(--primary); margin-bottom: 6px;"></i>
+        <p style="margin: 0; font-size: 13.5px; font-weight: 600;">All 4 ad slots are currently toggled OFF.</p>
+        <p style="margin: 4px 0 0 0; font-size: 12px;">Toggle on any ad slot above to preview its appearance here.</p>
+      </div>
+    `;
+    refreshIcons();
+    return;
+  }
+
+  previewBox.innerHTML = buildAdCardHTML(previewConfig);
+  refreshIcons();
+}
+
+function bindAdminAdsControls() {
+  const masterToggle = document.getElementById('admin-ads-enabled-toggle');
+  if (masterToggle) {
+    masterToggle.addEventListener('change', () => {
+      updateAdminAdsStatusPill(masterToggle.checked);
+      if (_siteAdsConfig) _siteAdsConfig.enabled = masterToggle.checked;
+      updateAdminAdLivePreview();
+    });
+  }
+
+  // Admin 4-slot navigation tabs
+  const tabsContainer = document.getElementById('admin-ad-slots-nav');
+  if (tabsContainer) {
+    tabsContainer.addEventListener('click', (e) => {
+      const tabBtn = e.target.closest('.admin-ad-slot-tab');
+      if (!tabBtn) return;
+
+      const slotIdx = parseInt(tabBtn.dataset.slotIndex, 10);
+      if (isNaN(slotIdx) || slotIdx === _activeAdminSlotIndex) return;
+
+      // Sync form into current slot first
+      syncCurrentSlotFromForm();
+
+      // Switch to new slot
+      _activeAdminSlotIndex = slotIdx;
+      renderAdminSlotTabs();
+      populateAdminSlotForm(slotIdx);
+      updateAdminAdLivePreview();
+    });
+  }
+
+  // Individual Slot Enabled Toggle
+  const slotToggle = document.getElementById('admin-slot-enabled-toggle');
+  if (slotToggle) {
+    slotToggle.addEventListener('change', () => {
+      const slotStatusLabel = document.getElementById('admin-slot-status-label');
+      if (slotStatusLabel) {
+        slotStatusLabel.textContent = `Slot Status: ${slotToggle.checked ? 'ACTIVE (ON)' : 'INACTIVE (OFF)'}`;
+        slotStatusLabel.style.color = slotToggle.checked ? '#10b981' : 'var(--text-muted)';
+      }
+      syncCurrentSlotFromForm();
+      updateAdminAdLivePreview();
+    });
+  }
+
+  const btnBanner = document.getElementById('btn-ad-format-banner');
+  if (btnBanner) {
+    btnBanner.addEventListener('click', () => setAdminAdFormat('banner', true));
+  }
+
+  const btnHtml = document.getElementById('btn-ad-format-html');
+  if (btnHtml) {
+    btnHtml.addEventListener('click', () => setAdminAdFormat('html', true));
+  }
+
+  ['admin-ad-tab-label', 'admin-ad-title', 'admin-ad-btn-text', 'admin-ad-desc', 'admin-ad-img', 'admin-ad-link', 'admin-ad-html'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('input', () => {
+        syncCurrentSlotFromForm();
+        updateAdminAdLivePreview();
+      });
+    }
+  });
+
+  const btnPreview = document.getElementById('btn-admin-preview-ad');
+  if (btnPreview) {
+    btnPreview.addEventListener('click', () => updateAdminAdLivePreview());
+  }
+
+  const btnSave = document.getElementById('btn-admin-save-ads');
+  if (btnSave) {
+    btnSave.addEventListener('click', async () => {
+      const origText = btnSave.innerHTML;
+      btnSave.disabled = true;
+      btnSave.innerHTML = '<i data-lucide="loader" class="spin" style="width:16px;height:16px;"></i> Saving...';
+      refreshIcons();
+
+      try {
+        syncCurrentSlotFromForm();
+
+        const masterToggleEl = document.getElementById('admin-ads-enabled-toggle');
+        _siteAdsConfig.enabled = !!masterToggleEl?.checked;
+        _siteAdsConfig.updatedAt = new Date().toISOString();
+
+        await api.setSetting('ads_config', _siteAdsConfig);
+
+        // Immediately update all ad slots across the site
+        renderSiteAds(true);
+        updateAdminAdsStatusPill(_siteAdsConfig.enabled);
+
+        if (typeof showToast === 'function') {
+          showToast(`Ad configuration saved! Platform ads are now ${_siteAdsConfig.enabled ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}.`, 'success');
+        } else {
+          alert(`Ad settings saved! Platform ads are now ${_siteAdsConfig.enabled ? 'ACTIVE (ON)' : 'DISABLED (OFF)'}.`);
+        }
+      } catch (err) {
+        alert(err.message || 'Failed to save ad settings');
+      } finally {
+        btnSave.disabled = false;
+        btnSave.innerHTML = origText;
+        refreshIcons();
+      }
+    });
   }
 }
 

@@ -5990,5 +5990,417 @@ body[data-theme="dark"] {
   border: 1px solid rgba(239, 68, 68, 0.35);
 }
 
+/* ==========================================================================
+   Responsive Site Advertisement System
+   ========================================================================== */
+
+.site-ad-slot-wrapper {
+  width: 100%;
+  max-width: 880px;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
+.site-ads-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+}
+
+.site-ad-card {
+  position: relative;
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+  border-radius: var(--radius-lg, 14px);
+  padding: 16px 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  overflow: hidden;
+}
+
+.site-ad-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.25);
+}
+
+.site-ad-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border-color, rgba(0, 0, 0, 0.06));
+}
+
+.site-ad-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--primary, #2563eb);
+  background: rgba(37, 99, 235, 0.08);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.site-ad-tagline {
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
+  font-weight: 500;
+}
+
+.site-ad-body {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.site-ad-media {
+  flex-shrink: 0;
+  width: 130px;
+  height: 82px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--primary-accent, rgba(37, 99, 235, 0.05));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.site-ad-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.site-ad-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.site-ad-title {
+  margin: 0 0 6px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main, #0f172a);
+  line-height: 1.35;
+}
+
+.site-ad-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted, #64748b);
+  line-height: 1.5;
+}
+
+.site-ad-action {
+  flex-shrink: 0;
+}
+
+.site-ad-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* Custom Ad Switch */
+.ad-switch input:checked + .ad-slider {
+  background-color: var(--primary, #2563eb) !important;
+}
+
+.ad-switch input:checked + .ad-slider .ad-slider-knob {
+  transform: translateX(24px) !important;
+}
+
+/* Admin Ad Slots Navigation Tabs */
+.admin-ad-slots-nav {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .admin-ad-slots-nav {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.admin-ad-slot-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--card-bg, #ffffff);
+  border: 1.5px solid var(--border-color, #e2e8f0);
+  border-radius: var(--radius-md, 10px);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+  position: relative;
+  user-select: none;
+}
+
+.admin-ad-slot-tab:hover {
+  border-color: var(--primary, #2563eb);
+  background: var(--primary-accent, rgba(37, 99, 235, 0.04));
+}
+
+.admin-ad-slot-tab.active {
+  border-color: var(--primary, #2563eb);
+  background: var(--primary-accent, rgba(37, 99, 235, 0.08));
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.admin-ad-tab-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.admin-ad-tab-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-main, #0f172a);
+}
+
+.admin-ad-tab-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #94a3b8;
+  display: inline-block;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-ad-tab-status-dot.active {
+  background-color: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.admin-ad-tab-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(100, 116, 139, 0.1);
+  color: var(--text-muted, #64748b);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.admin-ad-slot-tab.active .admin-ad-tab-badge {
+  background: rgba(37, 99, 235, 0.15);
+  color: var(--primary, #2563eb);
+}
+
+/* User-facing Site Ad Card Tabs */
+.site-ad-tabs-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  max-width: 100%;
+  padding: 2px 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.site-ad-tabs-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
+.site-ad-tab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+  background: transparent;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.site-ad-tab-pill:hover {
+  color: var(--primary, #2563eb);
+  border-color: var(--primary, #2563eb);
+  background: var(--primary-accent, rgba(37, 99, 235, 0.05));
+}
+
+.site-ad-tab-pill.active {
+  color: #ffffff;
+  background: var(--primary, #2563eb);
+  border-color: var(--primary, #2563eb);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+}
+
+/* ==========================================================================
+   Admin Panel Tab System (For PC, Tablet & Mobile)
+   ========================================================================== */
+
+.admin-tabs-nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--card-bg, #ffffff);
+  border: 1.5px solid var(--border-color, #e2e8f0);
+  border-radius: var(--radius-lg, 14px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  margin-top: 14px;
+  margin-bottom: 22px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-tabs-nav-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.admin-nav-tab-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 15px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.admin-tab-alert-dot {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: #ef4444;
+  border: 1.5px solid var(--card-bg, #ffffff);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.5), 0 0 8px rgba(239, 68, 68, 0.85);
+  animation: adminAlertDotPulse 1.8s infinite ease-in-out;
+  pointer-events: none;
+  z-index: 3;
+}
+
+@keyframes adminAlertDotPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.8;
+  }
+}
+
+.admin-nav-tab-btn i,
+.admin-nav-tab-btn svg {
+  color: var(--text-muted, #64748b);
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.admin-nav-tab-btn:hover {
+  color: var(--text-main, #0f172a);
+  background: var(--primary-accent, rgba(37, 99, 235, 0.05));
+  border-color: rgba(37, 99, 235, 0.15);
+}
+
+.admin-nav-tab-btn:hover i,
+.admin-nav-tab-btn:hover svg {
+  color: var(--primary, #2563eb);
+}
+
+.admin-nav-tab-btn.active {
+  color: #ffffff !important;
+  background: var(--primary, #2563eb) !important;
+  border-color: var(--primary, #2563eb) !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.28) !important;
+  font-weight: 700;
+}
+
+.admin-nav-tab-btn.active i,
+.admin-nav-tab-btn.active svg {
+  color: #ffffff !important;
+}
+
+.admin-nav-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.14);
+  color: inherit;
+  transition: all 0.2s ease;
+}
+
+.admin-nav-tab-btn.active .admin-nav-tab-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+/* Smooth section fade-in when switching tabs */
+.admin-subview {
+  animation: adminTabFadeIn 0.22s ease-out;
+}
+
+@keyframes adminTabFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* PC & Large Screen Grid/Wrap Enhancement */
+@media (min-width: 1200px) {
+  .admin-tabs-nav-bar {
+    flex-wrap: wrap;
+    gap: 9px;
+    padding: 10px 14px;
+  }
+  .admin-nav-tab-btn {
+    padding: 9px 17px;
+    font-size: 13.5px;
+  }
+}
+
+
 
 
