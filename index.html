@@ -4,6 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="google-adsense-account" content="ca-pub-1950443996388582">
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1950443996388582"
+    crossorigin="anonymous"></script>
   <link rel="icon" type="image/png" href="/icon.png">
   <link rel="apple-touch-icon" href="/icon-192.png">
   <link rel="manifest" href="/manifest.json">
@@ -1266,38 +1269,6 @@
             </div>
           </section>
 
-          <!-- Relocated Why Card Section -->
-          <section class="sh-reveal-scale"
-            style="margin-top: 50px; border-top: 1px solid var(--border-color); padding-top: 30px;">
-            <div class="card why-card" style="max-width: 650px; margin: 0 auto; padding: 30px;">
-              <h3 style="text-align: center; margin-bottom: 20px; font-size: 20px; color: var(--primary-dark);">Why
-                StudyMyte?</h3>
-              <ul class="why-list sh-reveal-stagger"
-                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; padding-left: 0;">
-                <li class="why-item" style="display: flex; align-items: center; gap: 10px; font-size: 14px;">
-                  <span class="why-icon"><i data-lucide="check-square"
-                      style="width: 18px; height: 18px; color: var(--success); flex-shrink: 0;"></i></span>
-                  <span>First-year friendly</span>
-                </li>
-                <li class="why-item" style="display: flex; align-items: center; gap: 10px; font-size: 14px;">
-                  <span class="why-icon"><i data-lucide="check-square"
-                      style="width: 18px; height: 18px; color: var(--success); flex-shrink: 0;"></i></span>
-                  <span>Subject-wise notes & PYQs</span>
-                </li>
-                <li class="why-item" style="display: flex; align-items: center; gap: 10px; font-size: 14px;">
-                  <span class="why-icon"><i data-lucide="check-square"
-                      style="width: 18px; height: 18px; color: var(--success); flex-shrink: 0;"></i></span>
-                  <span>Fast access via Google Drive PDFs</span>
-                </li>
-                <li class="why-item" style="display: flex; align-items: center; gap: 10px; font-size: 14px;">
-                  <span class="why-icon"><i data-lucide="check-square"
-                      style="width: 18px; height: 18px; color: var(--success); flex-shrink: 0;"></i></span>
-                  <span>Built by seniors for juniors</span>
-                </li>
-              </ul>
-            </div>
-          </section>
-
           <!-- Quick Email Support Banner -->
           <section class="sh-reveal-scale" style="margin-top: 32px; margin-bottom: 24px;">
             <div class="card" style="max-width: 650px; margin: 0 auto; padding: 22px 26px; text-align: center; border: 1px solid var(--border-color); background: linear-gradient(135deg, rgba(37, 99, 235, 0.04) 0%, rgba(234, 67, 53, 0.04) 100%);">
@@ -1329,6 +1300,9 @@
               </div>
             </div>
           </section>
+
+          <!-- Responsive Ad Section (Home Page Bottom) -->
+          <div class="site-ad-slot-wrapper" id="site-ad-home" data-slot="home" style="margin-top: 28px; margin-bottom: 24px;"></div>
         </div>
       </div>
 
@@ -1468,9 +1442,9 @@
                         </a>
                       </div>
                       <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; text-align: center;">
-                        By continuing, you agree to our <a href="javascript:void(0)" id="link-login-footer-terms"
-                          style="color: var(--primary); text-decoration: underline;">Terms</a> &amp; <a href="javascript:void(0)" id="link-login-footer-privacy"
-                          style="color: var(--primary); text-decoration: underline;">Privacy Policy</a>.
+                        By continuing, you agree to our <a href="#/terms"
+                          style="color: var(--primary); text-decoration: none;">Terms</a> &amp; <a href="#/privacy"
+                          style="color: var(--primary); text-decoration: none;">Privacy Policy</a>.
                       </div>
                     </div>
                   </div><!-- /auth-panel-login -->
@@ -1551,17 +1525,7 @@
                         </div>
                       </div>
 
-                      <!-- Terms & Privacy Acceptance Checkbox -->
-                      <div class="form-group" style="margin-top: 14px; margin-bottom: 12px; background: rgba(37,99,235,0.04); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 12px;">
-                        <label for="signup-terms-agree" style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 12px; line-height: 1.45; color: var(--text-main); user-select: none; margin: 0;">
-                          <input type="checkbox" id="signup-terms-agree" style="margin-top: 2px; width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; flex-shrink: 0;" required />
-                          <span>
-                            I agree to StudyMyte's <a href="javascript:void(0)" id="link-signup-terms" style="color: var(--primary); font-weight: 700; text-decoration: underline;">Terms of Service</a> and <a href="javascript:void(0)" id="link-signup-privacy" style="color: var(--primary); font-weight: 700; text-decoration: underline;">Privacy Policy</a>.
-                          </span>
-                        </label>
-                      </div>
-
-                      <button type="submit" class="btn btn-primary" id="btn-signup-submit" style="width: 100%; margin-top: 6px;">
+                      <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;">
                         <span id="signup-btn-content"
                           style="display: flex; align-items: center; justify-content: center; gap: 6px;">
                           <i data-lucide="user-plus" style="width: 18px; height: 18px;"></i> Complete Registration
@@ -1574,9 +1538,9 @@
                       <div>Already registered? <a href="#/login" id="link-switch-to-login"
                           style="font-weight: 700; color: var(--primary);">Login</a></div>
                       <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; text-align: center;">
-                        Academic portal rules apply. See <a href="javascript:void(0)" id="link-signup-footer-terms"
-                          style="color: var(--primary); text-decoration: underline;">Terms</a> &amp; <a href="javascript:void(0)" id="link-signup-footer-privacy"
-                          style="color: var(--primary); text-decoration: underline;">Privacy</a>.
+                        By registering, you agree to our <a href="#/terms"
+                          style="color: var(--primary); text-decoration: none;">Terms</a> &amp; <a href="#/privacy"
+                          style="color: var(--primary); text-decoration: none;">Privacy Policy</a>.
                       </div>
                     </div>
                   </div><!-- /auth-panel-signup -->
@@ -1818,91 +1782,68 @@
       <!-- TERMS & CONDITIONS MODAL -->
       <div id="modal-terms" class="modal-overlay" style="display: none; z-index: 1200;">
         <div class="modal-content"
-          style="max-width: 680px; max-height: 86vh; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); position: relative; border-radius: var(--radius-lg); overflow: hidden; background: var(--card-bg); border: 1px solid var(--border-color);">
+          style="max-width: 650px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); position: relative; border-radius: var(--radius-lg); overflow: hidden; background: var(--card-bg); border: 1px solid var(--border-color);">
           <button class="modal-close" id="modal-terms-close"
-            style="top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: var(--text-muted); cursor: pointer;" title="Close">&times;</button>
+            style="top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: var(--text-muted); cursor: pointer;">&times;</button>
           <div class="auth-header"
-            style="margin-bottom: 0; border-bottom: 1px solid var(--border-color); padding: 20px 24px 14px 24px; text-align: center;">
-            <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: var(--primary-accent); color: var(--primary); font-size: 11px; font-weight: 700; margin-bottom: 8px; border: 1px solid var(--border-color);">
-              <i data-lucide="shield-check" style="width: 14px; height: 14px;"></i> OFFICIAL COMMUNITY &amp; ACADEMIC CHARTER
-            </div>
+            style="margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding: 20px 24px 10px 24px;">
             <h2
-              style="display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--primary-dark); font-size: 21px; font-weight: 800; margin: 0;">
+              style="display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--primary-dark); font-size: 20px; font-weight: 800;">
               <i data-lucide="file-text" style="color: var(--primary); width: 24px; height: 24px;"></i>
               Terms of Service
             </h2>
-            <p style="font-size: 12.5px; color: var(--text-muted); text-align: center; margin-top: 4px; margin-bottom: 0;">Last Updated: November 2026 • Effective for all StudyMyte Users (studymyte.tech)</p>
+            <p style="font-size: 13px; color: var(--text-muted); text-align: center; margin-top: 4px;">Please read these
+              Terms of Service carefully before using StudyMyte</p>
           </div>
           <div
-            style="font-size: 13.5px; color: var(--text-main); line-height: 1.65; overflow-y: auto; padding: 16px 24px 20px 24px; flex: 1;">
-            
-            <div style="padding: 12px 14px; background: var(--primary-accent); border: 1px solid var(--border-color); border-radius: var(--radius-md); margin-bottom: 16px; font-size: 12.5px;">
-              <strong>Welcome to StudyMyte!</strong> By accessing or using our platform, registering an account, or reading and downloading academic materials, you agree to comply with and be bound by these Terms of Service. If you do not agree to these terms, you must not access or use StudyMyte.
-            </div>
+            style="font-size: 14px; color: var(--text-main); line-height: 1.6; overflow-y: auto; padding: 10px 24px 20px 24px; flex: 1;">
+            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--primary);">1. Acceptance of
+              Terms</h3>
+            <p style="margin-bottom: 16px;">By accessing and using StudyMyte, you agree to comply with and be bound by
+              these Terms of Service. If you do not agree, you must not use our platform.</p>
 
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">1. Platform Purpose &amp; Academic Scope</h3>
-            <p style="margin-bottom: 12px;">StudyMyte (accessible at <code>studymyte.tech</code>) is a centralized, non-commercial academic repository and collaborative learning portal created for engineering and higher education students and faculty. The platform provides access to lecture notes, past year question papers (PYQs), lab manuals, syllabus structures, reference textbooks, and interactive engineering simulations strictly for educational and self-study purposes.</p>
+            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--primary);">2. Purpose of the
+              Platform</h3>
+            <p style="margin-bottom: 16px;">StudyMyte is a central academic repository built for students and educators
+              to share study notes, past year question papers (PYQs), lab manuals, textbooks, and engineering
+              simulations. It is strictly for educational and non-commercial purposes.</p>
 
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">2. User Accounts &amp; Access Roles</h3>
-            <ul style="padding-left: 20px; list-style-type: disc; margin-bottom: 12px;">
-              <li style="margin-bottom: 6px;"><strong>Accuracy of Information:</strong> You agree to provide true, accurate, and current registration credentials (full name, valid phone number, and verified email address).</li>
-              <li style="margin-bottom: 6px;"><strong>Role Tiers:</strong> Student registrations receive immediate portal access upon signup. Educator (Teacher) and Administrator registrations require manual review and verification by platform administrators before elevated access is activated.</li>
-              <li style="margin-bottom: 6px;"><strong>Account Security:</strong> You are responsible for maintaining the confidentiality of your login credentials. Sharing accounts or creating fictitious accounts is strictly prohibited.</li>
+            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--primary);">3. User Accounts &
+              Approvals</h3>
+            <p style="margin-bottom: 16px;">You must provide accurate information when registering. Educator and Admin
+              accounts require manual review and verification by the system administrators before gaining access. You
+              are responsible for keeping your login credentials confidential.</p>
+
+            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--primary);">4. Upload &
+              Content Policy</h3>
+            <p style="margin-bottom: 12px;">When uploading documents, links, or files, you represent and warrant that:
+            </p>
+            <ul style="padding-left: 20px; list-style-type: disc; margin-bottom: 16px;">
+              <li style="margin-bottom: 6px;">The content is strictly academic, educational, and relevant to your
+                courses.</li>
+              <li style="margin-bottom: 6px;">You own the intellectual property or have acquired the appropriate
+                rights/permissions to share the materials.</li>
+              <li style="margin-bottom: 6px;">You will not upload copyrighted textbooks or publisher-owned solutions
+                keys without authorization.</li>
+              <li style="margin-bottom: 6px;">You will not upload spam, malware, or inappropriate/offensive content.
+              </li>
             </ul>
 
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">3. Resource Contribution &amp; Content Policy</h3>
-            <p style="margin-bottom: 8px;">When uploading documents, links, or notes to StudyMyte, you represent and warrant that:</p>
-            <ul style="padding-left: 20px; list-style-type: disc; margin-bottom: 12px;">
-              <li style="margin-bottom: 6px;">Uploaded notes, question papers, and manuals are strictly academic and course-relevant.</li>
-              <li style="margin-bottom: 6px;">You hold the necessary rights or legitimate fair-use academic interest to share the notes, handwritten summaries, or departmental papers.</li>
-              <li style="margin-bottom: 6px;">You will not upload copyrighted commercial publisher solution keys without authorization or confidential examination leaks.</li>
-              <li style="margin-bottom: 6px;">You will not upload defamatory, offensive, discriminatory content, spam, or malicious attachments.</li>
-              <li style="margin-bottom: 6px;">StudyMyte reserves the right to review, edit metadata, watermark, or unpublish any contributed material violating platform guidelines.</li>
-            </ul>
+            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--primary);">5. Limitation of
+              Liability</h3>
+            <p style="margin-bottom: 16px;">StudyMyte is provided "as is" and "as available". We do not guarantee
+              uninterrupted access. We are not liable for any direct, indirect, incidental, or consequential damages
+              resulting from your use or inability to use the platform.</p>
 
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">4. Digital Watermarking &amp; Anti-Scraping Protection</h3>
-            <p style="margin-bottom: 12px;">To protect community contributors, prevent commercial scraping, and deter unauthorized secondary re-distribution, documents viewed or downloaded on StudyMyte carry non-intrusive digital watermarks and cryptographic reference signatures. Attempting to reverse engineer, strip watermarks, or bulk-harvest platform resources via automated scrapers is a direct violation of these terms.</p>
-
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">5. MYTEE AI Academic Assistant Usage</h3>
-            <p style="margin-bottom: 12px;">MYTEE AI is provided to assist students with document summarization, concept explanations, exam revision, and intelligent site search. Users agree not to abuse MYTEE AI through prompt injections, jailbreaks, automated bot loops, or the generation of malicious software or academic misconduct material. StudyMyte monitors AI usage patterns to prevent platform abuse.</p>
-
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">6. Cyber-Security Rules &amp; The 3-Strike Enforcement Policy</h3>
-            <div style="background: rgba(239, 68, 68, 0.08); border-left: 3px solid #ef4444; padding: 10px 14px; border-radius: 4px; margin-bottom: 12px; font-size: 12.5px;">
-              <strong>Strict Security Zero-Tolerance:</strong> StudyMyte runs an automated Web Application Firewall (WAF) and Threat Sentinel surveillance engine.
-            </div>
-            <p style="margin-bottom: 8px;">The following actions constitute severe security violations:</p>
-            <ul style="padding-left: 20px; list-style-type: disc; margin-bottom: 12px;">
-              <li style="margin-bottom: 6px;">Intercepting HTTP requests using tools like Burp Suite or OWASP ZAP to tamper with request bodies (e.g. forging admin roles or unauthorized privileges).</li>
-              <li style="margin-bottom: 6px;">Injecting Burp Collaborator, out-of-band SSRF payloads, SQL injections, NoSQL operators, or cross-site scripting (XSS).</li>
-              <li style="margin-bottom: 6px;">Running automated scanners (such as <code>sqlmap</code>, <code>nikto</code>, <code>gobuster</code>, <code>dirbuster</code>, <code>wfuzz</code>).</li>
-              <li style="margin-bottom: 6px;">Triggering rapid denial-of-service (DoS) bursts or intruder fuzzing.</li>
-            </ul>
-            <p style="margin-bottom: 8px;"><strong>3-Strike Escalation:</strong></p>
-            <ul style="padding-left: 20px; list-style-type: circle; margin-bottom: 12px;">
-              <li style="margin-bottom: 4px;"><strong>Strike 1:</strong> Formal security warning and request block.</li>
-              <li style="margin-bottom: 4px;"><strong>Strike 2:</strong> High-severity platform alert recorded against profile.</li>
-              <li style="margin-bottom: 4px;"><strong>Strike 3:</strong> Immediate automated account lockdown (<code>ACCOUNT_SECURITY_LOCKDOWN</code>), session termination, and progressive lockout (1 hour, 72 hours, or permanent ban).</li>
-            </ul>
-
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">7. DMCA &amp; Copyright Takedown Procedure</h3>
-            <p style="margin-bottom: 12px;">StudyMyte respects the intellectual property rights of authors and academic publishers. If you are a copyright owner or authorized representative and believe content on our platform infringes your copyright, please submit a written takedown notice via our Help &amp; Support desk or by emailing <code>support@studymyte.tech</code> with details of the material. Verified infringing content will be promptly reviewed and removed within 24–48 business hours.</p>
-
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">8. Disclaimer of Warranties &amp; Limitation of Liability</h3>
-            <p style="margin-bottom: 12px;">StudyMyte is provided on an "as is" and "as available" basis without warranties of any kind. While we strive to maintain high service availability and reliable educational materials, StudyMyte does not guarantee uninterrupted operation or absolute accuracy of user-contributed notes. In no event shall StudyMyte, its founders, or maintainers be liable for any direct, indirect, or consequential damages resulting from platform use.</p>
-
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">9. Amendments &amp; Continued Use</h3>
-            <p style="margin-bottom: 12px;">We reserve the right to amend these Terms of Service at any time. Continued use of StudyMyte following modifications signifies your acceptance of the updated terms.</p>
-
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">10. Contact Us</h3>
-            <p style="margin-bottom: 4px;"><strong>Email:</strong> <a href="mailto:support@studymyte.tech" style="color: var(--primary);">support@studymyte.tech</a></p>
-            <p style="margin-bottom: 16px;"><strong>In-App:</strong> Help &amp; Support Desk</p>
+            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--primary);">6. Changes to
+              Terms</h3>
+            <p style="margin-bottom: 16px;">We reserve the right to modify these Terms of Service at any time. Your
+              continued use of StudyMyte after changes are posted constitutes acceptance of the updated terms.</p>
           </div>
           <div class="form-actions"
-            style="padding: 12px 24px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; background-color: var(--primary-accent);">
+            style="padding: 12px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: center; background-color: var(--primary-accent);">
             <button type="button" id="btn-terms-close-footer" class="btn btn-secondary"
-              style="min-width: 100px;">Close</button>
-            <button type="button" id="btn-terms-accept" class="btn btn-primary"
-              style="min-width: 140px;">I Agree to Terms</button>
+              style="width: 100%;">Close</button>
           </div>
         </div>
       </div>
@@ -1910,86 +1851,64 @@
       <!-- PRIVACY POLICY MODAL -->
       <div id="modal-privacy" class="modal-overlay" style="display: none; z-index: 1200;">
         <div class="modal-content"
-          style="max-width: 680px; max-height: 86vh; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); position: relative; border-radius: var(--radius-lg); overflow: hidden; background: var(--card-bg); border: 1px solid var(--border-color);">
+          style="max-width: 650px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); position: relative; border-radius: var(--radius-lg); overflow: hidden; background: var(--card-bg); border: 1px solid var(--border-color);">
           <button class="modal-close" id="modal-privacy-close"
-            style="top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: var(--text-muted); cursor: pointer;" title="Close">&times;</button>
+            style="top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: var(--text-muted); cursor: pointer;">&times;</button>
           <div class="auth-header"
-            style="margin-bottom: 0; border-bottom: 1px solid var(--border-color); padding: 20px 24px 14px 24px; text-align: center;">
-            <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: var(--primary-accent); color: var(--primary); font-size: 11px; font-weight: 700; margin-bottom: 8px; border: 1px solid var(--border-color);">
-              <i data-lucide="lock" style="width: 14px; height: 14px;"></i> DATA PRIVACY &amp; CONFIDENTIALITY GUARANTEE
-            </div>
+            style="margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding: 20px 24px 10px 24px;">
             <h2
-              style="display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--primary-dark); font-size: 21px; font-weight: 800; margin: 0;">
+              style="display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--primary-dark); font-size: 20px; font-weight: 800;">
               <i data-lucide="shield" style="color: var(--primary); width: 24px; height: 24px;"></i>
               Privacy Policy
             </h2>
-            <p style="font-size: 12.5px; color: var(--text-muted); text-align: center; margin-top: 4px; margin-bottom: 0;">Last Updated: November 2026 • StudyMyte Educational Platform (studymyte.tech)</p>
+            <p style="font-size: 13px; color: var(--text-muted); text-align: center; margin-top: 4px;">Your privacy
+              matters to us. Learn how we handle your information.</p>
           </div>
           <div
-            style="font-size: 13.5px; color: var(--text-main); line-height: 1.65; overflow-y: auto; padding: 16px 24px 20px 24px; flex: 1;">
-            
-            <div style="padding: 12px 14px; background: var(--primary-accent); border: 1px solid var(--border-color); border-radius: var(--radius-md); margin-bottom: 16px; font-size: 12.5px;">
-              <strong>Your Privacy is Fundamental to StudyMyte.</strong> We collect only the minimum information necessary to provide an authentic, safe academic experience. We never sell, monetize, or trade your personal details to third-party ad networks.
-            </div>
-
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">1. Information We Collect</h3>
-            <p style="margin-bottom: 8px;">We collect information directly provided by you during registration and site usage:</p>
-            <ul style="padding-left: 20px; list-style-type: disc; margin-bottom: 12px;">
-              <li style="margin-bottom: 6px;"><strong>Account &amp; Identity Data:</strong> Full Name, telephone number (for authentication/recovery), valid email address, selected role (Student / Educator / Admin), and cryptographically salted password hashes.</li>
-              <li style="margin-bottom: 6px;"><strong>Academic Content &amp; Contributions:</strong> Study documents, notes, PYQs, and manuals uploaded by you, including associated subject and branch metadata.</li>
-              <li style="margin-bottom: 6px;"><strong>Learning Interactions:</strong> Saved bookmarks, favorites, document likes, and help tickets submitted.</li>
-              <li style="margin-bottom: 6px;"><strong>Technical &amp; Security Metadata:</strong> Device type, browser name, operating system, IP address, and security request logs (collected strictly to defend against account takeover, brute-force attacks, and cyber threats).</li>
-              <li style="margin-bottom: 6px;"><strong>Push Notification Tokens:</strong> Optional Firebase Cloud Messaging (FCM) tokens to deliver exam reminders and critical notices.</li>
+            style="font-size: 14px; color: var(--text-main); line-height: 1.6; overflow-y: auto; padding: 10px 24px 20px 24px; flex: 1;">
+            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--primary);">1. Information We
+              Collect</h3>
+            <p style="margin-bottom: 12px;">We collect basic account credentials and academic metadata directly provided
+              by you, including:</p>
+            <ul style="padding-left: 20px; list-style-type: disc; margin-bottom: 16px;">
+              <li style="margin-bottom: 6px;">**Registration Data**: Name, phone number, role (student/educator/admin),
+                and securely hashed passwords.</li>
+              <li style="margin-bottom: 6px;">**Support Data**: Information provided when submitting support or
+                forgot-password tickets.</li>
+              <li style="margin-bottom: 6px;">**Usage Data**: Documents uploaded, resource bookmarks, and resource likes.</li>
             </ul>
 
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">2. How We Use Your Information</h3>
-            <p style="margin-bottom: 8px;">Your data is used solely to operate and enhance StudyMyte:</p>
-            <ul style="padding-left: 20px; list-style-type: disc; margin-bottom: 12px;">
-              <li style="margin-bottom: 6px;">Authenticating sessions, managing role permissions, and validating account ownership.</li>
-              <li style="margin-bottom: 6px;">Delivering personalized academic course resources based on semester and branch.</li>
-              <li style="margin-bottom: 6px;">Maintaining the Academic Contributor Leaderboard (displaying contributor name, verified upload count, and total appreciation likes).</li>
-              <li style="margin-bottom: 6px;">Dispatching transactional communications (e.g. welcome guides, account approval notifications, password reset OTPs via EmailJS).</li>
-              <li style="margin-bottom: 6px;">Safeguarding community security through our autonomous Threat Sentinel and 3-Strike prevention framework.</li>
+            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--primary);">2. How We Use
+              Information</h3>
+            <p style="margin-bottom: 12px;">We utilize your data strictly to operate and support StudyMyte, specifically
+              to:</p>
+            <ul style="padding-left: 20px; list-style-type: disc; margin-bottom: 16px;">
+              <li style="margin-bottom: 6px;">Manage authentication, permissions, and session validation.</li>
+              <li style="margin-bottom: 6px;">Maintain academic leaderboards (displaying educator name, contributions,
+                and cumulative likes).</li>
+              <li style="margin-bottom: 6px;">Dispatch system notifications and direct administrative messages.</li>
             </ul>
 
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">3. Third-Party Infrastructure &amp; Data Processors</h3>
-            <p style="margin-bottom: 8px;">StudyMyte partners only with reputable enterprise infrastructure providers to deliver services:</p>
-            <ul style="padding-left: 20px; list-style-type: disc; margin-bottom: 12px;">
-              <li style="margin-bottom: 6px;"><strong>MongoDB Atlas:</strong> Secure, cloud-hosted database clusters for profile and metadata storage.</li>
-              <li style="margin-bottom: 6px;"><strong>Cloudinary Cloud Storage:</strong> High-reliability cloud storage for uploaded PDF study materials.</li>
-              <li style="margin-bottom: 6px;"><strong>Google Gemini AI:</strong> Processes conversational academic questions and metadata extraction for MYTEE AI. Conversations are handled securely and not used to train public models.</li>
-              <li style="margin-bottom: 6px;"><strong>EmailJS / SMTP:</strong> Secure delivery of transactional verification OTPs and notification emails.</li>
-            </ul>
-            <p style="margin-bottom: 12px;"><em>We do NOT sell, lease, or distribute student records to data brokers, ad networks, or commercial telemarketers.</em></p>
+            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--primary);">3. Data Storage
+              and Third-Party Services</h3>
+            <p style="margin-bottom: 16px;">Your data is stored securely in our MongoDB collections and Cloudinary
+              storage (for direct PDF uploads). We do not sell or monetize your personal details.</p>
 
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">4. Data Protection &amp; Password Security</h3>
-            <p style="margin-bottom: 12px;">Passwords are salted and hashed using the industry-standard bcrypt algorithm before database storage. Raw passwords are never visible to administrators. All client-server communications are encrypted via SSL/TLS HTTPS protocols. Authenticated sessions use signed JSON Web Tokens (JWT) stored securely in client browser storage.</p>
+            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--primary);">4. Data Security
+            </h3>
+            <p style="margin-bottom: 16px;">Passwords are encrypted using bcrypt hashing before database insertion.
+              Session traffic is authorized via JSON Web Tokens (JWT) stored in your local browser container. Please log
+              out when using public computers to prevent unauthorized access.</p>
 
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">5. Cookies &amp; Local Storage Policy</h3>
-            <p style="margin-bottom: 12px;">StudyMyte does not deploy tracking cookies or third-party behavioral beacons. We utilize HTML5 <code>localStorage</code> strictly for functional necessities: persisting your active authentication token and saving your visual theme preference (Light / Dark mode).</p>
-
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">6. User Rights &amp; Data Management</h3>
-            <p style="margin-bottom: 8px;">As a StudyMyte user, you hold complete rights over your personal information:</p>
-            <ul style="padding-left: 20px; list-style-type: disc; margin-bottom: 12px;">
-              <li style="margin-bottom: 6px;">You can view and update your name and profile information via the Profile view.</li>
-              <li style="margin-bottom: 6px;">You can request a password reset at any time using your registered phone and email.</li>
-              <li style="margin-bottom: 6px;">You may request complete account deletion or removal of uploaded resources by contacting our Help &amp; Support desk.</li>
-            </ul>
-
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">7. Updates to this Policy</h3>
-            <p style="margin-bottom: 12px;">We may update this Privacy Policy from time to time to reflect new educational tools or statutory compliance. Notice of significant changes will be published on the platform.</p>
-
-            <h3 style="font-size: 15px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; color: var(--primary);">8. Privacy Support Contact</h3>
-            <p style="margin-bottom: 8px;">If you have any questions or privacy concerns, please contact our team:</p>
-            <p style="margin-bottom: 4px;"><strong>Email:</strong> <a href="mailto:support@studymyte.tech" style="color: var(--primary);">support@studymyte.tech</a></p>
-            <p style="margin-bottom: 16px;"><strong>Help Desk:</strong> In-App Support Ticket</p>
+            <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--primary);">5. Changes to this
+              Policy</h3>
+            <p style="margin-bottom: 16px;">We may update this Privacy Policy periodically to align with system
+              features. Significant updates will be accompanied by an announcement banner in the platform.</p>
           </div>
           <div class="form-actions"
-            style="padding: 12px 24px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; background-color: var(--primary-accent);">
+            style="padding: 12px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: center; background-color: var(--primary-accent);">
             <button type="button" id="btn-privacy-close-footer" class="btn btn-secondary"
-              style="min-width: 100px;">Close</button>
-            <button type="button" id="btn-privacy-accept" class="btn btn-primary"
-              style="min-width: 140px;">I Understand &amp; Agree</button>
+              style="width: 100%;">Close</button>
           </div>
         </div>
       </div>
@@ -2229,6 +2148,9 @@
           <div id="notes-content-container">
             <!-- Populated dynamically -->
           </div>
+
+          <!-- Responsive Ad Section (Notes Bottom) -->
+          <div class="site-ad-slot-wrapper" id="site-ad-notes" data-slot="notes" style="margin-top: 32px; margin-bottom: 24px;"></div>
         </div>
       </div>
       <!-- PAPERS VIEW -->
@@ -2246,6 +2168,9 @@
           <div id="papers-content-container">
             <!-- Populated dynamically -->
           </div>
+
+          <!-- Responsive Ad Section (Papers Bottom) -->
+          <div class="site-ad-slot-wrapper" id="site-ad-papers" data-slot="papers" style="margin-top: 32px; margin-bottom: 24px;"></div>
         </div>
       </div>
       <!-- RESOURCES VIEW -->
@@ -2263,6 +2188,9 @@
           <div id="resources-content-container">
             <!-- Populated dynamically -->
           </div>
+
+          <!-- Responsive Ad Section (Resources Bottom) -->
+          <div class="site-ad-slot-wrapper" id="site-ad-resources" data-slot="resources" style="margin-top: 32px; margin-bottom: 24px;"></div>
         </div>
       </div>
 
@@ -2288,8 +2216,66 @@
 
         <div id="admin-error-alert" class="alert alert-danger" style="display: none;"></div>
 
+        <!-- Admin Navigation Tab System (For PC & Larger Screens, Touch-friendly on Mobile) -->
+        <div class="admin-tabs-nav-bar" id="admin-navigation-tabs" role="tablist" aria-label="Admin Sections">
+          <button type="button" class="admin-nav-tab-btn active" data-tab-id="approvals" role="tab" title="Pending Approvals">
+            <span class="admin-tab-alert-dot" id="admin-alert-dot-approvals" style="display: none;"></span>
+            <i data-lucide="user-check" style="width: 17px; height: 17px;"></i>
+            <span>Approvals</span>
+            <span class="admin-nav-tab-badge" id="admin-tab-approvals-badge">0</span>
+          </button>
+          
+          <button type="button" class="admin-nav-tab-btn" data-tab-id="users" role="tab" title="User Directory">
+            <i data-lucide="users" style="width: 17px; height: 17px;"></i>
+            <span>User Directory</span>
+          </button>
+          
+          <button type="button" class="admin-nav-tab-btn" data-tab-id="contributions" role="tab" title="Pending Contributions">
+            <span class="admin-tab-alert-dot" id="admin-alert-dot-contributions" style="display: none;"></span>
+            <i data-lucide="upload-cloud" style="width: 17px; height: 17px;"></i>
+            <span>Contributions</span>
+          </button>
+          
+          <button type="button" class="admin-nav-tab-btn" data-tab-id="support" role="tab" title="Help & Support Requests">
+            <span class="admin-tab-alert-dot" id="admin-alert-dot-support" style="display: none;"></span>
+            <i data-lucide="help-circle" style="width: 17px; height: 17px;"></i>
+            <span>Help &amp; Support</span>
+          </button>
+          
+          <button type="button" class="admin-nav-tab-btn" data-tab-id="compose" role="tab" title="Send Notification">
+            <i data-lucide="send" style="width: 17px; height: 17px;"></i>
+            <span>Send Notice</span>
+          </button>
+          
+          <button type="button" class="admin-nav-tab-btn" data-tab-id="notifications" role="tab" title="Sent Notifications">
+            <i data-lucide="mail" style="width: 17px; height: 17px;"></i>
+            <span>Sent History</span>
+          </button>
+          
+          <button type="button" class="admin-nav-tab-btn" data-tab-id="security" role="tab" title="Unusual Activity Reports">
+            <span class="admin-tab-alert-dot" id="admin-alert-dot-security" style="display: none;"></span>
+            <i data-lucide="shield-alert" style="width: 17px; height: 17px;"></i>
+            <span>Security Logs</span>
+            <span class="admin-nav-tab-badge" id="admin-tab-security-badge" style="display: none;">0</span>
+          </button>
+          
+          <button type="button" class="admin-nav-tab-btn" data-tab-id="reviews" role="tab" title="User Reviews">
+            <i data-lucide="star" style="width: 17px; height: 17px;"></i>
+            <span>User Reviews</span>
+          </button>
+          
+          <button type="button" class="admin-nav-tab-btn" data-tab-id="ads" role="tab" title="Ad & Monetization Control">
+            <i data-lucide="megaphone" style="width: 17px; height: 17px;"></i>
+            <span>Ads &amp; Monetization</span>
+          </button>
+          
+          <button type="button" class="admin-nav-tab-btn" data-tab-id="storage" id="admin-tab-btn-storage" role="tab" style="display: none;" title="Cloud & Database Capacity">
+            <i data-lucide="hard-drive" style="width: 17px; height: 17px;"></i>
+            <span>Storage Capacity</span>
+          </button>
+        </div>
 
-        <div class="admin-subviews-container" style="margin-top: 20px;">
+        <div class="admin-subviews-container" style="margin-top: 10px;">
           <!-- Section: Pending Approvals -->
           <div id="admin-section-approvals" class="admin-subview" style="display: none;">
             <h3 class="section-title" style="margin-bottom: 16px; font-size: 20px;">
@@ -2537,6 +2523,223 @@
               <!-- Rendered via JS -->
             </div>
             <div id="reviews-show-more-container" style="margin-top: 20px; display: flex; justify-content: center;">
+            </div>
+          </div>
+
+          <!-- Section: Monetization & Ad Management -->
+          <div id="admin-section-ads" class="admin-subview" style="display: none; margin-bottom: 35px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 14px; border-bottom: 2px solid var(--border-color); padding-bottom: 14px;">
+              <div>
+                <h3 class="section-title" style="margin: 0; font-size: 20px; color: var(--primary); display: flex; align-items: center; gap: 8px;">
+                  <i data-lucide="megaphone" style="color: var(--primary); width: 22px; height: 22px;"></i>
+                  Ad &amp; Monetization Control
+                </h3>
+                <p style="color: var(--text-muted); margin-top: 4px; font-size: 14px; margin-bottom: 0;">
+                  Manage platform-wide sponsor banners and advertisement units with real-time toggle
+                </p>
+              </div>
+              <div id="admin-ads-live-status-pill" style="display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 700; background: rgba(100,116,139,0.1); color: var(--text-muted); border: 1px solid var(--border-color);">
+                <span id="admin-ads-status-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); display: inline-block;"></span>
+                <span id="admin-ads-status-text">Checking Status...</span>
+              </div>
+            </div>
+
+            <!-- Main Ad Control Card -->
+            <div class="card" style="padding: 24px; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); border: 1px solid var(--border-color); background: var(--card-bg); margin-bottom: 24px;">
+              
+              <!-- Master Toggle Switch Box -->
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; padding: 18px 20px; border-radius: var(--radius-md); background: var(--primary-accent); border: 1px solid var(--border-color); margin-bottom: 24px;">
+                <div>
+                  <h4 style="margin: 0 0 4px 0; font-size: 16px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                    <i data-lucide="power" style="width: 18px; height: 18px; color: var(--primary);"></i>
+                    Master Advertisement Switch
+                  </h4>
+                  <p style="margin: 0; font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+                    Turn all advertisements on or off across every page of the website instantly.
+                  </p>
+                </div>
+                
+                <!-- Toggle switch -->
+                <label class="ad-switch" style="position: relative; display: inline-block; width: 56px; height: 30px; cursor: pointer; flex-shrink: 0; user-select: none;">
+                  <input type="checkbox" id="admin-ads-enabled-toggle" style="opacity: 0; width: 0; height: 0; position: absolute;">
+                  <span class="ad-slider" id="admin-ads-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #94a3b8; transition: .3s; border-radius: 34px;">
+                    <span class="ad-slider-knob" style="position: absolute; content: ''; height: 22px; width: 22px; left: 4px; bottom: 4px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
+                  </span>
+                </label>
+              </div>
+
+              <!-- 4-Ad Slot Navigation Tabs (Max 4 Ads) -->
+              <div style="margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                  <div>
+                    <h5 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                      <i data-lucide="layers" style="width: 16px; height: 16px; color: var(--primary);"></i>
+                      Manage Advertisement Slots (Up to 4 Ads)
+                    </h5>
+                    <p style="margin: 3px 0 0 0; font-size: 12px; color: var(--text-muted);">
+                      Select any slot below to toggle it on/off and configure its custom sponsor banner or AdSense script.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="admin-ad-slots-nav" id="admin-ad-slots-nav">
+                  <button type="button" class="admin-ad-slot-tab active" data-slot-index="0">
+                    <div class="admin-ad-tab-header">
+                      <span class="admin-ad-tab-title">Ad 1</span>
+                      <span class="admin-ad-tab-status-dot active"></span>
+                    </div>
+                    <span class="admin-ad-tab-badge">AdSense</span>
+                  </button>
+                  <button type="button" class="admin-ad-slot-tab" data-slot-index="1">
+                    <div class="admin-ad-tab-header">
+                      <span class="admin-ad-tab-title">Ad 2</span>
+                      <span class="admin-ad-tab-status-dot"></span>
+                    </div>
+                    <span class="admin-ad-tab-badge">Banner</span>
+                  </button>
+                  <button type="button" class="admin-ad-slot-tab" data-slot-index="2">
+                    <div class="admin-ad-tab-header">
+                      <span class="admin-ad-tab-title">Ad 3</span>
+                      <span class="admin-ad-tab-status-dot"></span>
+                    </div>
+                    <span class="admin-ad-tab-badge">Banner</span>
+                  </button>
+                  <button type="button" class="admin-ad-slot-tab" data-slot-index="3">
+                    <div class="admin-ad-tab-header">
+                      <span class="admin-ad-tab-title">Ad 4</span>
+                      <span class="admin-ad-tab-status-dot"></span>
+                    </div>
+                    <span class="admin-ad-tab-badge">Banner</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Active Slot Configuration Card -->
+              <div class="admin-ad-slot-card" style="background: var(--bg-main, #f8fafc); border: 1.5px solid var(--border-color); border-radius: var(--radius-md); padding: 20px; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 14px;">
+                  <div>
+                    <h5 id="admin-slot-heading" style="margin: 0; font-size: 15px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                      <i data-lucide="edit-3" style="width: 16px; height: 16px; color: var(--primary);"></i>
+                      Configuring Ad Slot 1
+                    </h5>
+                    <p style="margin: 3px 0 0 0; font-size: 12px; color: var(--text-muted);">
+                      Toggle this individual ad slot on or off and set its banner or code format.
+                    </p>
+                  </div>
+                  <!-- Slot Individual Toggle Switch -->
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 13px; font-weight: 600; color: var(--text-main);" id="admin-slot-status-label">Slot Status: ACTIVE</span>
+                    <label class="ad-switch" style="position: relative; display: inline-block; width: 50px; height: 26px; cursor: pointer; flex-shrink: 0; user-select: none;">
+                      <input type="checkbox" id="admin-slot-enabled-toggle" style="opacity: 0; width: 0; height: 0; position: absolute;">
+                      <span class="ad-slider" id="admin-slot-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #94a3b8; transition: .3s; border-radius: 34px;">
+                        <span class="ad-slider-knob" style="position: absolute; content: ''; height: 18px; width: 18px; left: 4px; bottom: 4px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Slot Identifier / Label -->
+                <div style="margin-bottom: 16px;">
+                  <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-main);">
+                    Slot Label / Name <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">(Admin reference label, e.g. Ad 1, Google AdSense, Club Partner)</span>
+                  </label>
+                  <input type="text" id="admin-ad-tab-label" class="form-input" placeholder="e.g. Ad 1, Sponsor Banner, or AdSense" style="max-width: 320px;" />
+                </div>
+
+                <!-- Format Choice Tabs -->
+                <div style="margin-bottom: 18px;">
+                  <label style="display: block; font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--text-main);">
+                    Advertisement Type &amp; Delivery Mode
+                  </label>
+                  <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" id="btn-ad-format-banner" class="btn btn-sm btn-primary" style="display: flex; align-items: center; gap: 6px;">
+                      <i data-lucide="image" style="width: 15px; height: 15px;"></i> Custom Sponsor Banner
+                    </button>
+                    <button type="button" id="btn-ad-format-html" class="btn btn-sm btn-secondary" style="display: flex; align-items: center; gap: 6px;">
+                      <i data-lucide="code" style="width: 15px; height: 15px;"></i> Script / Google AdSense HTML
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Form: Custom Sponsor Banner Fields -->
+                <div id="admin-ad-fields-banner" style="display: block;">
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 16px;">
+                    <div class="form-group" style="margin: 0;">
+                      <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-main);">
+                        Ad Headline / Title <span style="color: var(--danger);">*</span>
+                      </label>
+                      <input type="text" id="admin-ad-title" class="form-input" placeholder="e.g. Master Full Stack &amp; AI with 40% Off" />
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                      <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-main);">
+                        Call-To-Action Button Text
+                      </label>
+                      <input type="text" id="admin-ad-btn-text" class="form-input" placeholder="e.g. Explore Offer ➔" />
+                    </div>
+                  </div>
+
+                  <div class="form-group" style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-main);">
+                      Ad Description / Pitch
+                    </label>
+                    <textarea id="admin-ad-desc" class="form-input" rows="2" style="resize: vertical;" placeholder="e.g. Get industry-standard DSA preparation curated for engineering students. Limited seats available."></textarea>
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 16px;">
+                    <div class="form-group" style="margin: 0;">
+                      <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-main);">
+                        Banner Image / Logo URL (Optional)
+                      </label>
+                      <input type="url" id="admin-ad-img" class="form-input" placeholder="https://example.com/banner.jpg" />
+                      <p style="font-size: 11px; color: var(--text-muted); margin: 4px 0 0 0;">Optional. If left blank, a stylish academic gradient badge will be shown automatically.</p>
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                      <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-main);">
+                        Destination URL (Click Link) <span style="color: var(--danger);">*</span>
+                      </label>
+                      <input type="url" id="admin-ad-link" class="form-input" placeholder="https://example.com or mailto:support@studymyte.tech" />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Form: HTML / Script Code Fields -->
+                <div id="admin-ad-fields-html" style="display: none; margin-bottom: 16px;">
+                  <div class="form-group" style="margin: 0;">
+                    <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-main);">
+                      Raw HTML / Ad Network Script Code
+                    </label>
+                    <textarea id="admin-ad-html" class="form-input" rows="5" style="font-family: monospace; font-size: 12px; resize: vertical;" placeholder="Paste Google AdSense code or ad network embed script here"></textarea>
+                    <p style="font-size: 11px; color: var(--text-muted); margin: 4px 0 0 0;">This code will be injected inside responsive ad containers across all bottom slots.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Action Bar -->
+              <div style="display: flex; gap: 12px; justify-content: flex-end; align-items: center; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 20px;">
+                <button type="button" id="btn-admin-preview-ad" class="btn btn-secondary btn-sm" style="display: flex; align-items: center; gap: 6px;">
+                  <i data-lucide="eye" style="width: 15px; height: 15px;"></i> Update Preview
+                </button>
+                <button type="button" id="btn-admin-save-ads" class="btn btn-primary" style="display: flex; align-items: center; gap: 8px; padding: 10px 22px;">
+                  <i data-lucide="check-circle" style="width: 17px; height: 17px;"></i> Save Ad Settings
+                </button>
+              </div>
+
+            </div>
+
+            <!-- Live Responsive Preview Card -->
+            <div class="card" style="padding: 20px 24px; border-radius: var(--radius-lg); border: 1px dashed var(--border-color); background: var(--bg-main);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+                  <i data-lucide="smartphone" style="width: 16px; height: 16px;"></i>
+                  Live Responsive Appearance Preview
+                </h4>
+                <span id="preview-mode-tag" style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-muted);">
+                  Interactive Preview
+                </span>
+              </div>
+              <div id="admin-ad-live-preview-box" style="min-height: 80px;">
+                <!-- Rendered dynamically -->
+              </div>
             </div>
           </div>
         </div>
