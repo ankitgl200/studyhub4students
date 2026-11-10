@@ -15737,20 +15737,26 @@ function updateAdminAdsStatusPill(isEnabled) {
   const dot = document.getElementById('admin-ads-status-dot');
   const text = document.getElementById('admin-ads-status-text');
   const pill = document.getElementById('admin-ads-live-status-pill');
-  if (!dot || !text || !pill) return;
+  if (dot && text && pill) {
+    if (isEnabled) {
+      dot.style.background = '#10b981';
+      text.textContent = 'Ads Currently: ACTIVE (ON)';
+      text.style.color = '#10b981';
+      pill.style.background = 'rgba(16, 185, 129, 0.1)';
+      pill.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+    } else {
+      dot.style.background = '#94a3b8';
+      text.textContent = 'Ads Currently: INACTIVE (OFF)';
+      text.style.color = 'var(--text-muted)';
+      pill.style.background = 'rgba(100, 116, 139, 0.1)';
+      pill.style.borderColor = 'var(--border-color)';
+    }
+  }
 
-  if (isEnabled) {
-    dot.style.background = '#10b981';
-    text.textContent = 'Ads Currently: ACTIVE (ON)';
-    text.style.color = '#10b981';
-    pill.style.background = 'rgba(16, 185, 129, 0.1)';
-    pill.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-  } else {
-    dot.style.background = '#94a3b8';
-    text.textContent = 'Ads Currently: INACTIVE (OFF)';
-    text.style.color = 'var(--text-muted)';
-    pill.style.background = 'rgba(100, 116, 139, 0.1)';
-    pill.style.borderColor = 'var(--border-color)';
+  const masterText = document.getElementById('admin-ads-master-text');
+  if (masterText) {
+    masterText.textContent = isEnabled ? 'ON' : 'OFF';
+    masterText.style.color = isEnabled ? '#10b981' : 'var(--text-muted)';
   }
 }
 
@@ -15848,6 +15854,7 @@ function bindAdminAdsControls() {
         slotStatusLabel.style.color = slotToggle.checked ? '#10b981' : 'var(--text-muted)';
       }
       syncCurrentSlotFromForm();
+      renderAdminSlotTabs();
       updateAdminAdLivePreview();
     });
   }

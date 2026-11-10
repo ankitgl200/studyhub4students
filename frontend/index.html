@@ -2559,13 +2559,14 @@
                   </p>
                 </div>
                 
-                <!-- Toggle switch -->
-                <label class="ad-switch" style="position: relative; display: inline-block; width: 56px; height: 30px; cursor: pointer; flex-shrink: 0; user-select: none;">
-                  <input type="checkbox" id="admin-ads-enabled-toggle" style="opacity: 0; width: 0; height: 0; position: absolute;">
-                  <span class="ad-slider" id="admin-ads-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #94a3b8; transition: .3s; border-radius: 34px;">
-                    <span class="ad-slider-knob" style="position: absolute; content: ''; height: 22px; width: 22px; left: 4px; bottom: 4px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
-                  </span>
-                </label>
+                <!-- Toggle switch with explicit badge -->
+                <div style="display: inline-flex; align-items: center; gap: 12px; background: var(--card-bg, #fff); padding: 8px 16px; border-radius: 9999px; border: 1px solid var(--border-color); box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+                  <span id="admin-ads-master-text" style="font-size: 13px; font-weight: 700; color: var(--text-muted); min-width: 32px;">OFF</span>
+                  <label class="ui-toggle-switch" title="Master Toggle All Advertisements" style="margin: 0;">
+                    <input type="checkbox" id="admin-ads-enabled-toggle" aria-label="Toggle all advertisements">
+                    <span class="ui-toggle-slider"></span>
+                  </label>
+                </div>
               </div>
 
               <!-- 4-Ad Slot Navigation Tabs (Max 4 Ads) -->
@@ -2627,13 +2628,11 @@
                     </p>
                   </div>
                   <!-- Slot Individual Toggle Switch -->
-                  <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="font-size: 13px; font-weight: 600; color: var(--text-main);" id="admin-slot-status-label">Slot Status: ACTIVE</span>
-                    <label class="ad-switch" style="position: relative; display: inline-block; width: 50px; height: 26px; cursor: pointer; flex-shrink: 0; user-select: none;">
-                      <input type="checkbox" id="admin-slot-enabled-toggle" style="opacity: 0; width: 0; height: 0; position: absolute;">
-                      <span class="ad-slider" id="admin-slot-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #94a3b8; transition: .3s; border-radius: 34px;">
-                        <span class="ad-slider-knob" style="position: absolute; content: ''; height: 18px; width: 18px; left: 4px; bottom: 4px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
-                      </span>
+                  <div style="display: inline-flex; align-items: center; gap: 12px; background: var(--card-bg, #fff); padding: 6px 14px; border-radius: 9999px; border: 1px solid var(--border-color); box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+                    <span style="font-size: 13px; font-weight: 700; color: var(--text-main);" id="admin-slot-status-label">Slot Status: ACTIVE (ON)</span>
+                    <label class="ui-toggle-switch" title="Toggle this slot on or off" style="margin: 0;">
+                      <input type="checkbox" id="admin-slot-enabled-toggle" aria-label="Toggle this slot on or off">
+                      <span class="ui-toggle-slider"></span>
                     </label>
                   </div>
                 </div>
@@ -4740,7 +4739,7 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
 
-  <script src="/app.js?v=1.3.24"></script>
+  <script src="/app.js?v=1.3.26"></script>
 
 
 
