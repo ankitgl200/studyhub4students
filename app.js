@@ -3965,7 +3965,7 @@ function showUserDeviceDetailsModal(u) {
 // 5. ADMIN DASHBOARD VIEW
 async function renderAdminDashboardView(currentHash) {
   if (!currentHash) {
-    currentHash = window.location.pathname;
+    currentHash = window.location.hash ? window.location.hash.replace(/^#\/?/, '/') : window.location.pathname;
   }
   if (currentHash.startsWith('#/')) {
     currentHash = currentHash.slice(1);
@@ -4068,6 +4068,11 @@ function switchAdminTab(tabKey, updateHash = true) {
     const isActive = btn.dataset.tabId === tabKey;
     btn.classList.toggle('active', isActive);
     btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    if (isActive) {
+      try {
+        btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      } catch (_) {}
+    }
   });
 
   // 4. Update the breadcrumbs subtitle
@@ -4867,12 +4872,10 @@ function bindAdminNavTabs() {
     };
 
     const fetchNotifications = async (showSkeleton = true) => {
-      const superadminMessagesSection = document.getElementById('admin-section-notifications');
       const superadminMessagesContainer = document.getElementById('superadmin-messages-list-container');
       const superadminMessagesCount = document.getElementById('superadmin-messages-count');
 
-      if ((currentUser.role === 'superadmin' || currentUser.role === 'admin') && superadminMessagesSection && superadminMessagesContainer && superadminMessagesCount) {
-        superadminMessagesSection.style.display = 'block';
+      if ((currentUser.role === 'superadmin' || currentUser.role === 'admin') && superadminMessagesContainer && superadminMessagesCount) {
         if (showSkeleton) superadminMessagesContainer.innerHTML = getListSkeleton();
 
         try {
@@ -5024,8 +5027,7 @@ function bindAdminNavTabs() {
           console.error('Error fetching sent notifications:', err);
           superadminMessagesContainer.innerHTML = `<div class="empty-state" style="color: var(--danger);">Failed to load sent notifications: ${escapeHTML(err.message)}</div>`;
         }
-      } else if (superadminMessagesSection) {
-        superadminMessagesSection.style.display = 'none';
+      } else if (superadminMessagesContainer) {
         const messagesShowMoreContainer = document.getElementById('messages-show-more-container');
         if (messagesShowMoreContainer) messagesShowMoreContainer.innerHTML = '';
       }
@@ -5158,13 +5160,11 @@ function bindAdminNavTabs() {
       fetchReviews()
     ]);
 
-    // Sync tab with query params if specified
-    if (typeof getHashQueryParams === 'function') {
-      const params = getHashQueryParams();
-      if (params.tab) {
-        switchAdminTab(params.tab, false);
-      }
-    }
+    // Strictly ensure only the selected tab view is displayed and all other 9 views remain hidden
+    const targetTabAfterFetch = (typeof getHashQueryParams === 'function' && getHashQueryParams().tab)
+      ? getHashQueryParams().tab
+      : (_currentAdminTab || initialTab);
+    switchAdminTab(targetTabAfterFetch, false);
 
     refreshIcons();
   } catch (err) {
@@ -11232,6 +11232,17 @@ async function initApp() {
   const adSpace = document.getElementById('site-ad-space');
   if (adSpace) adSpace.style.display = 'none';
 
+  // Absolute fail-safe: Ensure the loading overlay is dismissed within 4.5 seconds under any circumstance
+  setTimeout(() => {
+    const el = document.getElementById('view-loading');
+    if (el && el.style.display !== 'none') {
+      el.style.opacity = '0';
+      el.style.display = 'none';
+      const ad = document.getElementById('site-ad-space');
+      if (ad) ad.style.display = '';
+    }
+  }, 4500);
+
   if (token) {
     try {
       currentUser = await api.getMe();
@@ -11302,7 +11313,11 @@ async function initApp() {
   }
 
   // Run routing trigger to render current view behind loading screen
-  await router();
+  try {
+    await router();
+  } catch (routerErr) {
+    console.error('Initial route error:', routerErr);
+  }
 
   // Check if logged-in account needs to link an email address
   checkCompulsoryEmail();

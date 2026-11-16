@@ -6388,16 +6388,93 @@ body[data-theme="dark"] {
   }
 }
 
-/* PC & Large Screen Grid/Wrap Enhancement */
-@media (min-width: 1200px) {
+/* Admin Panel Navigation Tabs Responsive Design */
+@media (min-width: 768px) {
   .admin-tabs-nav-bar {
     flex-wrap: wrap;
-    gap: 9px;
+    gap: 8px;
+    padding: 9px 12px;
+    overflow-x: visible;
+  }
+  .admin-nav-tab-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .admin-tabs-nav-bar {
+    gap: 10px;
     padding: 10px 14px;
   }
   .admin-nav-tab-btn {
-    padding: 9px 17px;
+    padding: 9px 16px;
     font-size: 13.5px;
+  }
+}
+
+@media (max-width: 767px) {
+  .admin-tabs-nav-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 7px 10px;
+    gap: 6px;
+    margin-top: 10px;
+    margin-bottom: 18px;
+    border-radius: 12px;
+    scroll-padding: 0 8px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-nav-tab-btn {
+    padding: 8px 12px;
+    font-size: 12.5px;
+    gap: 6px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    scroll-snap-align: start;
+  }
+
+  .admin-nav-tab-btn i,
+  .admin-nav-tab-btn svg {
+    width: 15px !important;
+    height: 15px !important;
+  }
+
+  .admin-nav-tab-badge {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 10.5px;
+  }
+
+  /* Admin subview container and cards responsive polish */
+  .admin-subviews-container .section-title {
+    font-size: 18px !important;
+  }
+
+  /* Pending Approvals action buttons on mobile */
+  #admin-section-approvals .user-actions {
+    display: flex !important;
+    width: 100% !important;
+    gap: 10px !important;
+  }
+  #admin-section-approvals .user-actions button {
+    flex: 1 !important;
+    min-height: 38px !important;
+    justify-content: center !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+
+  /* Search box in user directory */
+  #admin-section-users .search-box-container {
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+  }
+  #admin-section-users #btn-admin-user-search {
+    padding: 10px 14px !important;
   }
 }
 
