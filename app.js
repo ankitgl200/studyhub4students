@@ -12713,6 +12713,8 @@ function initContributionEventHandlers() {
                   drawStudyMyteViewerWatermark(ctx, canvas.width, canvas.height);
                 }).catch(function () {});
               }
+            }).catch(function (err) {
+              console.warn(`Could not render page ${pageNum}:`, err);
             });
           }
         }
@@ -12754,7 +12756,43 @@ function initContributionEventHandlers() {
         pageObserver.observe(canvas);
         pageVisibilityObserver.observe(canvas);
       }
+    }).catch(function (firstPageErr) {
+      console.warn('Could not retrieve first page from PDF:', firstPageErr);
+      showPdfViewerFallback(url, fileName, firstPageErr);
     });
+  }
+
+  function showPdfViewerFallback(url, fileName, error) {
+    const container = document.getElementById('pdf-viewer-container');
+    const loading = document.getElementById('pdf-loading-indicator');
+    const customToolbar = document.getElementById('pdf-custom-toolbar');
+    if (loading) loading.style.display = 'none';
+    if (customToolbar) customToolbar.style.display = 'none';
+    if (!container) return;
+
+    const safeUrl = (url || '').replace(/"/g, '&quot;');
+    const safeName = (fileName || 'document.pdf').replace(/"/g, '&quot;');
+
+    container.innerHTML = `
+      <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 16px; padding: 36px 24px; max-width: 460px; width: 90%; text-align: center; margin: 40px auto; color: #fff; box-shadow: 0 12px 32px rgba(0,0,0,0.4);">
+        <div style="width: 54px; height: 54px; margin: 0 auto 16px; border-radius: 50%; background: rgba(59, 130, 246, 0.15); display: flex; align-items: center; justify-content: center; color: #60a5fa;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        </div>
+        <h4 style="font-size: 17px; font-weight: 700; margin: 0 0 8px; color: #ffffff;">Open Educational Document</h4>
+        <p style="font-size: 13px; color: #94a3b8; line-height: 1.5; margin: 0 0 22px;">
+          This resource is formatted for native reading. Open it directly in your browser's PDF viewer or download to view offline.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #2563eb; color: #fff; padding: 11px 18px; border-radius: 8px; font-weight: 600; font-size: 13px; text-decoration: none; transition: background 0.2s;">
+            <span>Open in Native Viewer</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+          </a>
+          <a href="${safeUrl}" download="${safeName}" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: rgba(255,255,255,0.08); color: #cbd5e1; padding: 10px 18px; border-radius: 8px; font-weight: 500; font-size: 13px; text-decoration: none; border: 1px solid rgba(255,255,255,0.12);">
+            <span>Download Document</span>
+          </a>
+        </div>
+      </div>
+    `;
   }
 
   function loadPdfIntoViewer(url, fileName) {
@@ -12769,6 +12807,7 @@ function initContributionEventHandlers() {
       title.textContent = fileName || 'Document Viewer';
       modal.style.display = 'flex';
       loading.style.display = 'block';
+      loading.textContent = 'Loading document...';
       if (customToolbar) customToolbar.style.display = 'none';
       container.innerHTML = '';
       currentCssScale = 1;
@@ -12784,7 +12823,10 @@ function initContributionEventHandlers() {
         }
         return res.arrayBuffer();
       }).then(arrayBuffer => {
-        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const loadingTask = pdfjsLib.getDocument({
+          data: arrayBuffer,
+          stopAtErrors: false
+        });
         return loadingTask.promise;
       }).then(function (pdfDoc_) {
         pdfDoc = pdfDoc_;
@@ -12792,11 +12834,10 @@ function initContributionEventHandlers() {
         if (customToolbar) customToolbar.style.display = 'flex';
 
         pdfScale = window.innerWidth < 768 ? 1.0 : 1.8;
-        renderAllPages();
+        renderAllPages(url, fileName);
       }).catch(function (reason) {
-        console.error(reason);
-        loading.style.display = 'block';
-        loading.textContent = reason.message || 'Error loading PDF';
+        console.error('PDF load error:', reason);
+        showPdfViewerFallback(url, fileName, reason);
       });
 
       const closeModal = () => {
