@@ -3159,14 +3159,17 @@ body, input, select, textarea, button {
 @media (min-width: 769px) {
   .desktop-footer {
     display: block !important;
-    background: #fbfbf9;
-    color: #1e293b;
-    border-top: 1.5px solid var(--border-color, #e2e8f0);
+    background: var(--card-bg, #ffffff);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    color: var(--text-main, #1c3d5a);
+    border-top: 1.5px solid var(--border-color, rgba(30, 86, 160, 0.12));
     padding: 0;
     margin-top: 60px;
     font-family: inherit;
     position: relative;
     z-index: 10;
+    box-shadow: 0 -4px 20px rgba(14, 56, 122, 0.04);
   }
 
   .footer-grid-container {
@@ -3174,12 +3177,12 @@ body, input, select, textarea, button {
     margin: 0 auto;
     display: grid;
     grid-template-columns: 1.4fr 1fr 1fr 1.2fr;
-    border-bottom: 1px solid var(--border-color, #e2e8f0);
+    border-bottom: 1px solid var(--border-color, rgba(30, 86, 160, 0.12));
   }
 
   .footer-col {
     padding: 44px 32px;
-    border-right: 1px solid var(--border-color, #e2e8f0);
+    border-right: 1px solid var(--border-color, rgba(30, 86, 160, 0.12));
     display: flex;
     flex-direction: column;
   }
@@ -3188,76 +3191,35 @@ body, input, select, textarea, button {
     border-right: none;
   }
 
-  /* Column 1: Dual Logos & Brand Identity */
-  .footer-logos-duo {
+  /* Column 1: Brand & Logo */
+  .footer-brand-identity {
     display: flex;
     align-items: center;
-    gap: 16px;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
 
   .footer-brand-logo-link {
     display: inline-flex;
     align-items: center;
+    gap: 12px;
+    text-decoration: none;
   }
 
   .footer-logo-img {
     height: 44px;
-    width: auto;
-    object-fit: contain;
+    width: 44px;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+    border: 1.5px solid var(--border-color, rgba(30, 86, 160, 0.15));
   }
 
-  .footer-vertical-divider {
-    width: 1px;
-    height: 38px;
-    background: var(--border-color, #cbd5e1);
-  }
-
-  .footer-inst-seal {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .footer-inst-icon-box {
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-    background: var(--primary-accent, rgba(37, 99, 235, 0.08));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--primary, #2563eb);
-    border: 1px solid rgba(37, 99, 235, 0.18);
-  }
-
-  .footer-inst-meta {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.15;
-  }
-
-  .footer-inst-abbr {
-    font-family: 'Space Grotesk', monospace, sans-serif;
-    font-size: 13px;
+  .footer-brand-name {
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 20px;
     font-weight: 800;
-    letter-spacing: 0.8px;
-    color: var(--text-main, #0f172a);
-  }
-
-  .footer-inst-loc {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-muted, #64748b);
-  }
-
-  .footer-brand-title {
-    font-family: 'Space Grotesk', monospace, sans-serif;
-    font-size: 16px;
-    font-weight: 800;
-    letter-spacing: 1.2px;
-    margin: 0 0 4px 0;
-    color: var(--text-main, #0f172a);
+    letter-spacing: 1px;
+    color: var(--text-main, #1c3d5a);
   }
 
   .footer-brand-badge {
@@ -4445,54 +4407,50 @@ body[data-theme="dark"] {
 /* Desktop Footer in Dark Mode */
 @media (min-width: 769px) {
   [data-theme="dark"] .desktop-footer {
-    background: #060b17 !important;
-    border-top: 1.5px solid rgba(255, 255, 255, 0.1) !important;
-    color: #f8fafc !important;
-    box-shadow: 0 -12px 35px rgba(0, 0, 0, 0.6) !important;
+    background: var(--card-bg, rgba(16, 25, 48, 0.86)) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border-top: 1.5px solid var(--border-color, rgba(255, 255, 255, 0.11)) !important;
+    color: var(--text-main, #f8fafc) !important;
+    box-shadow: 0 -12px 35px rgba(0, 0, 0, 0.5) !important;
   }
 
   [data-theme="dark"] .footer-grid-container {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.11)) !important;
   }
 
   [data-theme="dark"] .footer-col {
-    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-right: 1px solid var(--border-color, rgba(255, 255, 255, 0.11)) !important;
   }
 
-  [data-theme="dark"] .footer-vertical-divider {
-    background: rgba(255, 255, 255, 0.15) !important;
-  }
-
-  [data-theme="dark"] .footer-brand-title,
-  [data-theme="dark"] .footer-inst-abbr {
-    color: #f8fafc !important;
+  [data-theme="dark"] .footer-brand-name {
+    color: var(--text-main, #f8fafc) !important;
   }
 
   [data-theme="dark"] .footer-col-heading,
   [data-theme="dark"] .footer-brand-desc,
-  [data-theme="dark"] .footer-inst-loc,
   [data-theme="dark"] .footer-copyright-text {
-    color: #94a3b8 !important;
+    color: var(--text-muted, #94a3b8) !important;
   }
 
   [data-theme="dark"] .footer-links-list li a {
-    color: #e2e8f0 !important;
+    color: var(--text-main, #f8fafc) !important;
   }
 
   [data-theme="dark"] .footer-links-list li a:hover {
-    color: #60a5fa !important;
+    color: var(--primary, #3b82f6) !important;
   }
 
   [data-theme="dark"] .footer-telemetry-badge {
     background: rgba(255, 255, 255, 0.05) !important;
-    border-color: rgba(255, 255, 255, 0.12) !important;
-    color: #cbd5e1 !important;
+    border-color: var(--border-color, rgba(255, 255, 255, 0.11)) !important;
+    color: var(--text-main, #cbd5e1) !important;
   }
 
   [data-theme="dark"] .footer-telemetry-badge strong,
   [data-theme="dark"] .footer-telemetry-badge i,
   [data-theme="dark"] .footer-telemetry-badge svg {
-    color: #60a5fa !important;
+    color: var(--primary, #3b82f6) !important;
   }
 
   [data-theme="dark"] .footer-credit-text,

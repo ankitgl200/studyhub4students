@@ -1448,12 +1448,24 @@ async function router() {
     document.getElementById('view-appearance').style.display = 'block';
     renderAppearanceView();
   } else if (cleanPath === '/terms') {
-    navigate('/');
-    setTimeout(() => showTermsModal(), 100);
+    if (router._prevPath && router._prevPath !== '/terms' && router._prevPath !== '/privacy') {
+      const prev = router._prevPath;
+      router._prevPath = '';
+      window.location.hash = '#' + prev;
+    } else {
+      document.getElementById('view-home').style.display = 'block';
+    }
+    showTermsModal();
     return;
   } else if (cleanPath === '/privacy') {
-    navigate('/');
-    setTimeout(() => showPrivacyModal(), 100);
+    if (router._prevPath && router._prevPath !== '/terms' && router._prevPath !== '/privacy') {
+      const prev = router._prevPath;
+      router._prevPath = '';
+      window.location.hash = '#' + prev;
+    } else {
+      document.getElementById('view-home').style.display = 'block';
+    }
+    showPrivacyModal();
     return;
   } else {
     document.getElementById('view-home').style.display = 'block';
@@ -9460,7 +9472,7 @@ function initEventHandlers() {
     }
 
     // Intercept terms of service link clicks
-    const termsLink = e.target.closest('a[href="/terms"]');
+    const termsLink = e.target.closest('a[href="/terms"], a[href="#/terms"], #footer-link-terms');
     if (termsLink) {
       e.preventDefault();
       showTermsModal();
@@ -9468,7 +9480,7 @@ function initEventHandlers() {
     }
 
     // Intercept privacy policy link clicks
-    const privacyLink = e.target.closest('a[href="/privacy"]');
+    const privacyLink = e.target.closest('a[href="/privacy"], a[href="#/privacy"], #footer-link-privacy');
     if (privacyLink) {
       e.preventDefault();
       showPrivacyModal();
@@ -9871,7 +9883,7 @@ function initEventHandlers() {
   });
 
   // Bind direct Terms & Privacy modal open links
-  const termsLinkIds = ['link-signup-terms', 'link-signup-footer-terms', 'link-login-footer-terms'];
+  const termsLinkIds = ['link-signup-terms', 'link-signup-footer-terms', 'link-login-footer-terms', 'footer-link-terms'];
   termsLinkIds.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
@@ -9882,7 +9894,7 @@ function initEventHandlers() {
     }
   });
 
-  const privacyLinkIds = ['link-signup-privacy', 'link-signup-footer-privacy', 'link-login-footer-privacy'];
+  const privacyLinkIds = ['link-signup-privacy', 'link-signup-footer-privacy', 'link-login-footer-privacy', 'footer-link-privacy'];
   privacyLinkIds.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
