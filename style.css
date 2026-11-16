@@ -2735,7 +2735,7 @@ body {
 /* Hill Hump Styling for the Mobile Bottom Nav */
 .mobile-bottom-nav {
   position: fixed !important;
-  bottom: 20px !important; /* Floats above bottom with 20px margin */
+  bottom: var(--dock-bottom-offset, 20px) !important; /* Floats above bottom with adaptive footer clearance */
   left: 20px !important;
   right: 20px !important;
   width: calc(100% - 40px) !important;
@@ -3048,7 +3048,7 @@ body {
 
   /* Place floating buttons perfectly above the bottom floating navbar */
   .btn-floating-contribute {
-    bottom: 96px !important;
+    bottom: var(--floating-btn-bottom-offset, 96px) !important;
     left: 20px !important;
   }
 }
@@ -3144,7 +3144,7 @@ body, input, select, textarea, button {
     padding: 36px 32px !important;
   }
   .btn-floating-contribute {
-    bottom: 30px !important;
+    bottom: var(--floating-btn-bottom-offset, 30px) !important;
     left: 30px !important;
   }
 }
@@ -3400,7 +3400,7 @@ body, input, select, textarea, button {
     --t: 0 !important;
     display: flex !important;
     position: fixed !important;
-    bottom: 26px !important;
+    bottom: var(--dock-bottom-offset, 26px) !important;
     left: 20px !important;
     right: 20px !important;
     margin: 0 auto !important;
@@ -4822,7 +4822,7 @@ body[data-theme="dark"] {
 /* Floating Launcher Button */
 .mytee-launcher {
   position: fixed !important;
-  bottom: 28px !important;
+  bottom: var(--mytee-bottom-offset, 28px) !important;
   right: 28px !important;
   z-index: 99998 !important;
   display: flex !important;
@@ -5469,7 +5469,7 @@ body[data-theme="dark"] {
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   .mytee-launcher {
-    bottom: 96px !important;
+    bottom: var(--mytee-bottom-offset, 96px) !important;
     right: 18px !important;
     padding: 8px 14px 8px 10px !important;
     font-size: 13px !important;

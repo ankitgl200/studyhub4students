@@ -1004,6 +1004,57 @@ function updateNavbar() {
 // ----------------------------------------------------------------
 // DESKTOP SCROLL NAV ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Instant, fluid, cancelable anime.js engine
 // ----------------------------------------------------------------
+// ----------------------------------------------------------------
+// FLOATING DOCK & MYTEE LAUNCHER FOOTER ADAPTIVE CLEARANCE
+// Lifts floating controls dynamically when the user scrolls near the footer
+// so they never overlap the footer columns, sub-bar, or copyright text.
+// ----------------------------------------------------------------
+function updateFloatingElementsFooterOffset() {
+  const footer = document.getElementById('main-desktop-footer') || document.querySelector('.desktop-footer');
+  const dock = document.getElementById('dock') || document.querySelector('.mobile-bottom-nav');
+  const myteeLauncher = document.getElementById('mytee-launcher');
+  const contributeBtn = document.getElementById('btn-floating-contribute');
+
+  if (!footer) return;
+
+  const style = window.getComputedStyle(footer);
+  if (style.display === 'none' || style.visibility === 'hidden') {
+    if (dock) dock.style.removeProperty('--dock-bottom-offset');
+    if (myteeLauncher) myteeLauncher.style.removeProperty('--mytee-bottom-offset');
+    if (contributeBtn) contributeBtn.style.removeProperty('--floating-btn-bottom-offset');
+    return;
+  }
+
+  const footerRect = footer.getBoundingClientRect();
+  const windowHeight = window.innerHeight;
+  // How much the top of the footer has entered the viewport from the bottom
+  const overlap = windowHeight - footerRect.top;
+
+  const isDesktop = window.innerWidth >= 769;
+  const baseDockBottom = isDesktop ? 26 : 20;
+  const baseMyteeBottom = isDesktop ? 28 : 96;
+  const baseContributeBottom = isDesktop ? 30 : 96;
+
+  if (overlap > 0) {
+    // Top of footer is inside the viewport; lift elements so they sit cleanly above the footer border
+    const maxDockBottom = windowHeight - 90;
+    const maxMyteeBottom = windowHeight - 70;
+    const maxContributeBottom = windowHeight - 70;
+
+    const dockBottom = Math.min(maxDockBottom, Math.round(baseDockBottom + overlap));
+    const myteeBottom = Math.min(maxMyteeBottom, Math.round(baseMyteeBottom + overlap));
+    const contributeBottom = Math.min(maxContributeBottom, Math.round(baseContributeBottom + overlap));
+
+    if (dock) dock.style.setProperty('--dock-bottom-offset', `${dockBottom}px`);
+    if (myteeLauncher) myteeLauncher.style.setProperty('--mytee-bottom-offset', `${myteeBottom}px`);
+    if (contributeBtn) contributeBtn.style.setProperty('--floating-btn-bottom-offset', `${contributeBottom}px`);
+  } else {
+    if (dock) dock.style.removeProperty('--dock-bottom-offset');
+    if (myteeLauncher) myteeLauncher.style.removeProperty('--mytee-bottom-offset');
+    if (contributeBtn) contributeBtn.style.removeProperty('--floating-btn-bottom-offset');
+  }
+}
+
 function initDesktopScrollNav() {
   const navbar = document.querySelector('.navbar');
   const navLinks = document.getElementById('desktop-nav-links');
@@ -1118,7 +1169,12 @@ function initDesktopScrollNav() {
   // Use requestAnimationFrame for immediate, non-laggy, non-dropping scroll response
   let ticking = false;
   function onScroll() {
-    if (window.innerWidth < 769) return;
+    updateFloatingElementsFooterOffset();
+
+    if (window.innerWidth < 769) {
+      ticking = false;
+      return;
+    }
     const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
 
     if (scrollY > SCROLL_THRESHOLD) {
@@ -1141,6 +1197,7 @@ function initDesktopScrollNav() {
 
   // Handle window resize
   window.addEventListener('resize', () => {
+    updateFloatingElementsFooterOffset();
     if (window.innerWidth < 769) {
       currentState = 'top';
       dock.classList.remove('desktop-scrolled-show');
@@ -1507,6 +1564,7 @@ async function router() {
   renderSiteAds();
 
   refreshIcons();
+  updateFloatingElementsFooterOffset();
 }
 
 // --- VIEW RENDERERS ---
