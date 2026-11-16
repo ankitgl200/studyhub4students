@@ -4029,6 +4029,12 @@ const ADMIN_TABS_CONFIG = {
     title: 'Cloud & Database Capacity',
     route: '/admin/storage',
     superadminOnly: true
+  },
+  'site-settings': {
+    sectionId: 'superadmin-section-site-settings',
+    title: 'Site Metadata & Platform Settings',
+    route: '/admin/site-settings',
+    superadminOnly: true
   }
 };
 
@@ -4039,9 +4045,10 @@ function switchAdminTab(tabKey, updateHash = true) {
   // Normalize aliases
   if (tabKey === 'pending') tabKey = 'approvals';
   if (tabKey === 'duplicates') tabKey = 'contributions';
+  if (tabKey === 'settings') tabKey = 'site-settings';
 
   // Permission check for superadmin only tab
-  if (tabKey === 'storage' && (!currentUser || currentUser.role !== 'superadmin')) {
+  if ((tabKey === 'storage' || tabKey === 'site-settings') && (!currentUser || currentUser.role !== 'superadmin')) {
     tabKey = 'approvals';
   }
 
@@ -4100,6 +4107,8 @@ function switchAdminTab(tabKey, updateHash = true) {
     if (typeof loadAdminAdsSettings === 'function') loadAdminAdsSettings();
   } else if (tabKey === 'security') {
     if (typeof loadAdminSecurityReports === 'function') loadAdminSecurityReports();
+  } else if (tabKey === 'site-settings') {
+    if (typeof loadAdminSiteSettings === 'function') loadAdminSiteSettings();
   }
 
   refreshIcons();
@@ -4142,10 +4151,14 @@ function bindAdminNavTabs() {
     errorAlert.style.display = 'none';
   }
 
-  // Superadmin storage tab visibility in the tab bar
+  // Superadmin storage & site settings tab visibility in the tab bar
   const storageTabBtn = document.getElementById('admin-tab-btn-storage');
   if (storageTabBtn) {
     storageTabBtn.style.display = (currentUser && currentUser.role === 'superadmin') ? 'inline-flex' : 'none';
+  }
+  const siteSettingsTabBtn = document.getElementById('admin-tab-btn-site-settings');
+  if (siteSettingsTabBtn) {
+    siteSettingsTabBtn.style.display = (currentUser && currentUser.role === 'superadmin') ? 'inline-flex' : 'none';
   }
 
   // Bind tab bar buttons
@@ -11280,6 +11293,7 @@ async function initApp() {
     .catch(err => console.error('Failed pre-loading subjects list', err));
 
   updateNavbar();
+  loadPublicSiteMeta();
   initEventHandlers();
 
   initContributionEventHandlers();
@@ -14723,6 +14737,125 @@ document.addEventListener('click', (e) => {
 });
 
 // =========================================================================
+// StudyMyte Site Settings (Version & Last Updated) UI Controller
+// =========================================================================
+
+let _adminSiteSettingsBound = false;
+
+async function loadPublicSiteMeta() {
+  try {
+    const res = await api.getSetting('site_meta');
+    if (res && res.value) {
+      const versionEl = document.getElementById('footer-site-version');
+      const updatedEl = document.getElementById('footer-last-updated');
+      if (versionEl && res.value.version) {
+        versionEl.textContent = res.value.version;
+      }
+      if (updatedEl && res.value.lastUpdated) {
+        updatedEl.textContent = res.value.lastUpdated;
+      }
+    }
+  } catch (err) {
+    console.debug('Failed to load public site meta:', err);
+  }
+}
+
+async function loadAdminSiteSettings() {
+  const versionInput = document.getElementById('admin-input-site-version');
+  const updatedInput = document.getElementById('admin-input-last-updated');
+  const previewVersion = document.getElementById('admin-preview-site-version');
+  const previewUpdated = document.getElementById('admin-preview-last-updated');
+  const alertEl = document.getElementById('admin-site-settings-alert');
+  const form = document.getElementById('form-admin-site-settings');
+  const setTodayBtn = document.getElementById('btn-admin-set-today-date');
+
+  if (!versionInput || !updatedInput) return;
+
+  const syncPreview = () => {
+    if (previewVersion) previewVersion.textContent = versionInput.value.trim() || 'v1.3.28';
+    if (previewUpdated) previewUpdated.textContent = updatedInput.value.trim() || '16 Nov 2026';
+  };
+
+  if (!_adminSiteSettingsBound) {
+    _adminSiteSettingsBound = true;
+
+    versionInput.addEventListener('input', syncPreview);
+    updatedInput.addEventListener('input', syncPreview);
+
+    if (setTodayBtn) {
+      setTodayBtn.addEventListener('click', () => {
+        const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        updatedInput.value = todayStr;
+        syncPreview();
+      });
+    }
+
+    if (form) {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = document.getElementById('btn-save-site-settings');
+        const origHTML = submitBtn ? submitBtn.innerHTML : '';
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<i data-lucide="loader-2" class="spin-animation" style="width: 16px; height: 16px;"></i> Saving...';
+          refreshIcons();
+        }
+
+        try {
+          const version = versionInput.value.trim();
+          const lastUpdated = updatedInput.value.trim();
+          if (!version || !lastUpdated) throw new Error('Please fill in both Version and Last Update Date.');
+
+          await api.setSetting('site_meta', { version, lastUpdated });
+
+          // Update footer elements live immediately
+          const footerVer = document.getElementById('footer-site-version');
+          const footerUpd = document.getElementById('footer-last-updated');
+          if (footerVer) footerVer.textContent = version;
+          if (footerUpd) footerUpd.textContent = lastUpdated;
+
+          if (alertEl) {
+            alertEl.style.display = 'block';
+            alertEl.style.background = 'rgba(16, 185, 129, 0.12)';
+            alertEl.style.color = '#065f46';
+            alertEl.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+            alertEl.innerHTML = '✅ Site settings updated successfully! Public footer is updated.';
+            setTimeout(() => { alertEl.style.display = 'none'; }, 4000);
+          }
+        } catch (err) {
+          if (alertEl) {
+            alertEl.style.display = 'block';
+            alertEl.style.background = 'rgba(239, 68, 68, 0.12)';
+            alertEl.style.color = '#991b1b';
+            alertEl.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+            alertEl.textContent = 'Failed to save settings: ' + (err.message || err);
+          }
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = origHTML;
+            refreshIcons();
+          }
+        }
+      });
+    }
+  }
+
+  // Fetch current settings from backend
+  try {
+    const res = await api.getSetting('site_meta');
+    const val = (res && res.value) ? res.value : { version: 'v1.3.28', lastUpdated: '16 Nov 2026' };
+    versionInput.value = val.version || 'v1.3.28';
+    updatedInput.value = val.lastUpdated || '16 Nov 2026';
+    syncPreview();
+  } catch (err) {
+    versionInput.value = 'v1.3.28';
+    updatedInput.value = '16 Nov 2026';
+    syncPreview();
+  }
+}
+
+// =========================================================================
 // StudyMyte AI Threat Sentinel & Unusual Activity Reports UI Controller
 // =========================================================================
 
@@ -15472,14 +15605,16 @@ function buildSingleAdBodyHTML(ad) {
   const imgUrl = ad.imageUrl ? escapeHTML(ad.imageUrl) : '';
 
   return `
-    <div class="site-ad-body">
+    <div class="site-ad-body ${imgUrl ? 'has-media-image' : 'has-media-icon'}">
       ${imgUrl ? `
-        <div class="site-ad-media">
+        <div class="site-ad-media has-image">
           <img src="${imgUrl}" alt="${title}" loading="lazy" onerror="this.parentElement.style.display='none';" />
         </div>
       ` : `
-        <div class="site-ad-media" style="background: linear-gradient(135deg, rgba(37,99,235,0.12) 0%, rgba(16,185,129,0.12) 100%);">
-          <i data-lucide="award" style="width: 32px; height: 32px; color: var(--primary);"></i>
+        <div class="site-ad-media is-icon">
+          <div class="site-ad-icon-box">
+            <i data-lucide="award" style="width: 26px; height: 26px; color: var(--primary);"></i>
+          </div>
         </div>
       `}
       <div class="site-ad-content">

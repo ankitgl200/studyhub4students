@@ -2273,6 +2273,11 @@
             <i data-lucide="hard-drive" style="width: 17px; height: 17px;"></i>
             <span>Storage Capacity</span>
           </button>
+
+          <button type="button" class="admin-nav-tab-btn" data-tab-id="site-settings" id="admin-tab-btn-site-settings" role="tab" style="display: none;" title="Site Version & Last Update Control">
+            <i data-lucide="sliders" style="width: 17px; height: 17px;"></i>
+            <span>Site Settings</span>
+          </button>
         </div>
 
         <div class="admin-subviews-container" style="margin-top: 10px;">
@@ -2739,6 +2744,86 @@
               <div id="admin-ad-live-preview-box" style="min-height: 80px;">
                 <!-- Rendered dynamically -->
               </div>
+            </div>
+          </div>
+
+          <!-- Section: Super Admin Site Settings (Version & Last Updated) -->
+          <div id="superadmin-section-site-settings" class="admin-subview" style="display: none; margin-bottom: 35px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 14px; border-bottom: 2px solid var(--border-color); padding-bottom: 14px;">
+              <div>
+                <h3 class="section-title" style="margin: 0; font-size: 20px; color: var(--primary); display: flex; align-items: center; gap: 8px;">
+                  <i data-lucide="sliders" style="color: var(--primary); width: 22px; height: 22px;"></i>
+                  Site Settings &amp; Public Metadata
+                </h3>
+                <p style="color: var(--text-muted); margin-top: 4px; font-size: 14px; margin-bottom: 0;">
+                  Manage the live platform release version and last updated date displayed across the website footer.
+                </p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px; background: rgba(59,130,246,0.1); color: var(--primary); padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid rgba(59,130,246,0.25);">
+                <i data-lucide="shield-check" style="width: 14px; height: 14px;"></i> Super Admin Only
+              </div>
+            </div>
+
+            <div class="card" style="padding: 24px; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); border: 1px solid var(--border-color); background: var(--card-bg); max-width: 720px;">
+              <div id="admin-site-settings-alert" style="display: none; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; font-weight: 600;"></div>
+
+              <form id="form-admin-site-settings">
+                <!-- Setting 1: Site Version -->
+                <div class="form-group" style="margin-bottom: 22px;">
+                  <label for="admin-input-site-version" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; font-size: 13.5px; font-weight: 700; color: var(--text-main);">
+                    <span style="display: flex; align-items: center; gap: 6px;">
+                      <i data-lucide="git-branch" style="width: 16px; height: 16px; color: var(--primary);"></i>
+                      Site Version
+                    </span>
+                    <span style="font-size: 11.5px; font-weight: 500; color: var(--text-muted);">Format: vX.Y.Z (e.g. v1.3.28)</span>
+                  </label>
+                  <input type="text" id="admin-input-site-version" class="form-input" placeholder="e.g. v1.3.28" style="width: 100%; padding: 11px 14px; font-family: monospace; font-size: 14px; font-weight: 700;" required />
+                  <small style="color: var(--text-muted); font-size: 12px; margin-top: 4px; display: block;">
+                    Displayed in the desktop footer badge and release identifiers.
+                  </small>
+                </div>
+
+                <!-- Setting 2: Last Update Date -->
+                <div class="form-group" style="margin-bottom: 24px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px;">
+                    <label for="admin-input-last-updated" style="display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13.5px; font-weight: 700; color: var(--text-main);">
+                      <i data-lucide="calendar" style="width: 16px; height: 16px; color: var(--primary);"></i>
+                      Last Update Date
+                    </label>
+                    <button type="button" id="btn-admin-set-today-date" class="btn btn-secondary btn-sm" style="font-size: 11.5px; padding: 4px 10px; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;">
+                      <i data-lucide="clock" style="width: 13px; height: 13px;"></i> Set to Today
+                    </button>
+                  </div>
+                  <input type="text" id="admin-input-last-updated" class="form-input" placeholder="e.g. 16 Nov 2026 or Nov 16, 2026" style="width: 100%; padding: 11px 14px; font-size: 14px;" required />
+                  <small style="color: var(--text-muted); font-size: 12px; margin-top: 4px; display: block;">
+                    Human-readable date indicating when the latest content or patch was deployed.
+                  </small>
+                </div>
+
+                <!-- Live Preview Container -->
+                <div style="background: var(--primary-accent); border: 1px dashed var(--border-color); border-radius: 10px; padding: 14px 18px; margin-bottom: 24px;">
+                  <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 8px;">
+                    Live Footer Preview
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <div style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; font-size: 12.5px; font-weight: 600; color: var(--text-main);">
+                      <i data-lucide="git-branch" style="width: 14px; height: 14px; color: var(--primary);"></i>
+                      <span>Version: <strong id="admin-preview-site-version" style="color: var(--primary);">v1.3.28</strong></span>
+                    </div>
+                    <div style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; font-size: 12.5px; font-weight: 600; color: var(--text-main);">
+                      <i data-lucide="calendar" style="width: 14px; height: 14px; color: var(--primary);"></i>
+                      <span>Last Updated: <strong id="admin-preview-last-updated" style="color: var(--primary);">16 Nov 2026</strong></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end;">
+                  <button type="submit" id="btn-save-site-settings" class="btn btn-primary" style="padding: 10px 24px; display: inline-flex; align-items: center; gap: 8px; font-weight: 700;">
+                    <i data-lucide="save" style="width: 16px; height: 16px;"></i>
+                    <span>Save Site Settings</span>
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
@@ -3377,46 +3462,114 @@
 
     </main>
 
-    <!-- DESKTOP FOOTER -->
-    <footer class="desktop-footer">
-      <h3 class="footer-brand">StudyMyte</h3>
-      <p class="footer-tagline">A central academic repository for students.</p>
+    <!-- DESKTOP FOOTER (Architectural Grid Design with Live Metadata) -->
+    <footer class="desktop-footer" id="main-desktop-footer">
+      <div class="footer-grid-container">
+        
+        <!-- Column 1: Brand & Institution Crest -->
+        <div class="footer-col footer-col-brand">
+          <div class="footer-logos-duo">
+            <a href="#/" class="footer-brand-logo-link" title="StudyMyte Home">
+              <img src="/logowht.png" alt="StudyMyte Logo" class="footer-logo-img logo-img-theme-adaptive" />
+            </a>
+            <div class="footer-vertical-divider" aria-hidden="true"></div>
+            <div class="footer-inst-seal" title="BTKIT KEC Dwarahat">
+              <div class="footer-inst-icon-box">
+                <i data-lucide="graduation-cap" style="width: 22px; height: 22px;"></i>
+              </div>
+              <div class="footer-inst-meta">
+                <span class="footer-inst-abbr">BTKIT</span>
+                <span class="footer-inst-loc">Dwarahat</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="footer-brand-text-block">
+            <h4 class="footer-brand-title">STUDYMYTE</h4>
+            <span class="footer-brand-badge">THE ACADEMIC DIGITAL HUB</span>
+            <p class="footer-brand-desc">
+              Centralized repository of verified lecture notes, previous-year question papers, lab manuals, and peer-to-peer academic resources for KEC Dwarahat.
+            </p>
+          </div>
+        </div>
 
-      <div class="footer-connect" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-        <span>Connect:</span>
-        <a href="https://www.instagram.com/studymyte_0fficial?utm_source=qr" target="_blank" rel="noopener noreferrer"
-          style="display: flex; align-items: center; gap: 6px;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-            style="width: 16px; height: 16px;">
-            <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
-            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-            <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
-          </svg>
-          Instagram
-        </a>
-        <span style="opacity: 0.5;">&bull;</span>
-        <a href="https://t.me/+Y8-xHuu_XBo0ZDBl" target="_blank" rel="noopener noreferrer"
-          style="display: flex; align-items: center; gap: 6px;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-            style="width: 16px; height: 16px;">
-            <line x1="22" x2="11" y1="2" y2="13" />
-            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-          </svg>
-          Telegram
-        </a>
+        <!-- Column 2: Quick Links -->
+        <div class="footer-col footer-col-links">
+          <h5 class="footer-col-heading">QUICK LINKS</h5>
+          <ul class="footer-links-list">
+            <li><a href="#/"><i data-lucide="home"></i> Home</a></li>
+            <li><a href="#/notes"><i data-lucide="book-open"></i> Lecture Notes</a></li>
+            <li><a href="#/papers"><i data-lucide="file-text"></i> PYQs &amp; Papers</a></li>
+            <li><a href="#/resources"><i data-lucide="compass"></i> Resources &amp; Roadmaps</a></li>
+            <li><a href="#/contributors"><i data-lucide="award"></i> Top Contributors</a></li>
+            <li><a href="#/support"><i data-lucide="help-circle"></i> Help &amp; Support</a></li>
+          </ul>
+        </div>
+
+        <!-- Column 3: Legal & Governance -->
+        <div class="footer-col footer-col-links">
+          <h5 class="footer-col-heading">LEGAL &amp; POLICIES</h5>
+          <ul class="footer-links-list">
+            <li><a href="#/privacy"><i data-lucide="shield-check"></i> Privacy Policy</a></li>
+            <li><a href="#/terms"><i data-lucide="file-check"></i> Terms of Service</a></li>
+            <li><a href="#/academic-integrity"><i data-lucide="check-circle-2"></i> Academic Honor Code</a></li>
+            <li><a href="#/about"><i data-lucide="info"></i> About the Platform</a></li>
+          </ul>
+        </div>
+
+        <!-- Column 4: Channels & Socials -->
+        <div class="footer-col footer-col-links footer-col-socials">
+          <h5 class="footer-col-heading">CHANNELS &amp; CONNECT</h5>
+          <ul class="footer-links-list">
+            <li>
+              <a href="mailto:support@studymyte.tech" class="footer-outbound-link">
+                <span>support@studymyte.tech</span>
+                <i data-lucide="arrow-up-right"></i>
+              </a>
+            </li>
+            <li>
+              <a href="https://www.instagram.com/studymyte_0fficial?utm_source=qr" target="_blank" rel="noopener noreferrer" class="footer-outbound-link">
+                <span>INSTAGRAM</span>
+                <i data-lucide="arrow-up-right"></i>
+              </a>
+            </li>
+            <li>
+              <a href="https://t.me/+Y8-xHuu_XBo0ZDBl" target="_blank" rel="noopener noreferrer" class="footer-outbound-link">
+                <span>TELEGRAM COMMUNITY</span>
+                <i data-lucide="arrow-up-right"></i>
+              </a>
+            </li>
+            <li>
+              <a href="https://github.com/ankitgl200/studyhub4students" target="_blank" rel="noopener noreferrer" class="footer-outbound-link">
+                <span>GITHUB REPOSITORY</span>
+                <i data-lucide="arrow-up-right"></i>
+              </a>
+            </li>
+          </ul>
+        </div>
+
       </div>
 
-      <p class="footer-copyright">&copy; 2026 StudyMyte. Built for juniors, by seniors.</p>
-      <p class="footer-copyright">Developed By : Ankit Ghugtyal</p>
+      <!-- Footer Sub-bar with Live Metadata -->
+      <div class="footer-sub-bar">
+        <div class="footer-copyright-text">
+          &copy; 2026 STUDYMYTE &bull; BTKIT DWARAHAT. ALL RIGHTS RESERVED.
+        </div>
 
-      <div class="footer-links">
-        <a href="#/privacy">Privacy Policy</a>
-        <span class="footer-divider">|</span>
-        <a href="#/terms">Terms of Service</a>
-        <span class="footer-divider">|</span>
-        <a href="#/support">Help & Support</a>
+        <div class="footer-telemetry-cluster">
+          <div class="footer-telemetry-badge" title="Current Release Version">
+            <i data-lucide="git-branch" style="width: 13px; height: 13px;"></i>
+            <span>Version: <strong id="footer-site-version">v1.3.28</strong></span>
+          </div>
+          <div class="footer-telemetry-badge" title="Platform Last Updated Timestamp">
+            <i data-lucide="calendar" style="width: 13px; height: 13px;"></i>
+            <span>Last Updated: <strong id="footer-last-updated">16 Nov 2026</strong></span>
+          </div>
+        </div>
+
+        <div class="footer-credit-text">
+          DEVELOPED BY <a href="#/about" class="footer-dev-link">ANKIT GHUGTYAL &amp; TEAM</a>
+        </div>
       </div>
     </footer>
   </div>
@@ -4739,7 +4892,7 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
 
-  <script src="/app.js?v=1.3.27"></script>
+  <script src="/app.js?v=1.3.28"></script>
 
 
 
