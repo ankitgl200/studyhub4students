@@ -12677,7 +12677,12 @@ function initContributionEventHandlers() {
     }
   }
 
-  function renderAllPages() {
+  let currentViewerDocUrl = '';
+  let currentViewerDocName = '';
+
+  function renderAllPages(url, fileName) {
+    if (url) currentViewerDocUrl = url;
+    if (fileName) currentViewerDocName = fileName;
     const container = document.getElementById('pdf-viewer-container');
     const scrollRoot = document.getElementById('doc-viewer-body');
     const totalPagesEl = document.getElementById('pdf-total-pages');
@@ -12770,8 +12775,8 @@ function initContributionEventHandlers() {
     if (customToolbar) customToolbar.style.display = 'none';
     if (!container) return;
 
-    const safeUrl = (url || '').replace(/"/g, '&quot;');
-    const safeName = (fileName || 'document.pdf').replace(/"/g, '&quot;');
+    const safeUrl = (url || currentViewerDocUrl || '').replace(/"/g, '&quot;');
+    const safeName = (fileName || currentViewerDocName || 'document.pdf').replace(/"/g, '&quot;');
 
     container.innerHTML = `
       <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 16px; padding: 36px 24px; max-width: 460px; width: 90%; text-align: center; margin: 40px auto; color: #fff; box-shadow: 0 12px 32px rgba(0,0,0,0.4);">
