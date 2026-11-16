@@ -1018,10 +1018,19 @@ function updateFloatingElementsFooterOffset() {
   if (!footer) return;
 
   const style = window.getComputedStyle(footer);
-  if (style.display === 'none' || style.visibility === 'hidden') {
-    if (dock) dock.style.removeProperty('--dock-bottom-offset');
-    if (myteeLauncher) myteeLauncher.style.removeProperty('--mytee-bottom-offset');
-    if (contributeBtn) contributeBtn.style.removeProperty('--floating-btn-bottom-offset');
+  if (style.display === 'none' || style.visibility === 'hidden' || footer.offsetHeight === 0) {
+    if (dock) {
+      dock.style.removeProperty('bottom');
+      dock.style.removeProperty('--dock-bottom-offset');
+    }
+    if (myteeLauncher) {
+      myteeLauncher.style.removeProperty('bottom');
+      myteeLauncher.style.removeProperty('--mytee-bottom-offset');
+    }
+    if (contributeBtn) {
+      contributeBtn.style.removeProperty('bottom');
+      contributeBtn.style.removeProperty('--floating-btn-bottom-offset');
+    }
     return;
   }
 
@@ -1045,15 +1054,39 @@ function updateFloatingElementsFooterOffset() {
     const myteeBottom = Math.min(maxMyteeBottom, Math.round(baseMyteeBottom + overlap));
     const contributeBottom = Math.min(maxContributeBottom, Math.round(baseContributeBottom + overlap));
 
-    if (dock) dock.style.setProperty('--dock-bottom-offset', `${dockBottom}px`);
-    if (myteeLauncher) myteeLauncher.style.setProperty('--mytee-bottom-offset', `${myteeBottom}px`);
-    if (contributeBtn) contributeBtn.style.setProperty('--floating-btn-bottom-offset', `${contributeBottom}px`);
+    if (dock) {
+      dock.style.setProperty('bottom', `${dockBottom}px`, 'important');
+      dock.style.setProperty('--dock-bottom-offset', `${dockBottom}px`);
+    }
+    if (myteeLauncher) {
+      myteeLauncher.style.setProperty('bottom', `${myteeBottom}px`, 'important');
+      myteeLauncher.style.setProperty('--mytee-bottom-offset', `${myteeBottom}px`);
+    }
+    if (contributeBtn) {
+      contributeBtn.style.setProperty('bottom', `${contributeBottom}px`, 'important');
+      contributeBtn.style.setProperty('--floating-btn-bottom-offset', `${contributeBottom}px`);
+    }
   } else {
-    if (dock) dock.style.removeProperty('--dock-bottom-offset');
-    if (myteeLauncher) myteeLauncher.style.removeProperty('--mytee-bottom-offset');
-    if (contributeBtn) contributeBtn.style.removeProperty('--floating-btn-bottom-offset');
+    if (dock) {
+      dock.style.removeProperty('bottom');
+      dock.style.removeProperty('--dock-bottom-offset');
+    }
+    if (myteeLauncher) {
+      myteeLauncher.style.removeProperty('bottom');
+      myteeLauncher.style.removeProperty('--mytee-bottom-offset');
+    }
+    if (contributeBtn) {
+      contributeBtn.style.removeProperty('bottom');
+      contributeBtn.style.removeProperty('--floating-btn-bottom-offset');
+    }
   }
 }
+
+// Global scroll and resize listeners for floating footer clearance
+window.addEventListener('scroll', updateFloatingElementsFooterOffset, { passive: true });
+document.addEventListener('scroll', updateFloatingElementsFooterOffset, { passive: true });
+window.addEventListener('resize', updateFloatingElementsFooterOffset, { passive: true });
+setTimeout(updateFloatingElementsFooterOffset, 150);
 
 function initDesktopScrollNav() {
   const navbar = document.querySelector('.navbar');
