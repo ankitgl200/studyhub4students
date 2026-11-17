@@ -1604,6 +1604,8 @@ async function router() {
 
 // 1. HOME VIEW (Announcements)
 async function renderHomeView() {
+  initHomeScrollAnimations();
+
   const clubsBtn = document.getElementById('home-btn-clubs') || document.getElementById('home-btn-contributors');
   if (clubsBtn) {
     clubsBtn.style.display = 'inline-flex';
@@ -1707,14 +1709,12 @@ async function renderHomeView() {
 
   try {
     const list = await api.getAnnouncements();
-    if (list.length === 0) {
+    if (!list || list.length === 0) {
       container.innerHTML = `<div class="empty-state">No announcements posted yet. Check back later!</div>`;
-      return;
-    }
-
-    container.innerHTML = `
-      <div class="announcements-container sh-reveal-stagger in-view">
-        ${list.map((ann, idx) => {
+    } else {
+      container.innerHTML = `
+        <div class="announcements-container sh-reveal-stagger in-view">
+          ${list.map((ann, idx) => {
       const delayStyle = `animation-delay: ${idx * 0.08}s;`;
       const cardStyle = ann.docUrl ? `style="cursor: pointer; border-left: 4px solid var(--primary); ${delayStyle}"` : `style="${delayStyle}"`;
       const isAnnPdf = ann.docUrl && (/\.pdf/i.test(ann.docUrl) || /documents\/download/i.test(ann.docUrl));
@@ -1770,7 +1770,7 @@ async function renderHomeView() {
         }
       });
     });
-
+    }
   } catch (err) {
     container.innerHTML = `<div class="empty-state" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.2)">Error loading announcements.</div>`;
   }
@@ -1944,7 +1944,7 @@ async function renderNotesView() {
   try {
     const [subFolders, docs] = await Promise.all([
       api.getFolders('notes', parentId),
-      parentId ? api.getDocuments('notes', parentId) : Promise.resolve([])
+      api.getDocuments('notes', parentId)
     ]);
 
     const hasSubFolders = subFolders.length > 0;
@@ -2155,7 +2155,7 @@ async function renderPapersView() {
   try {
     const [subFolders, docs] = await Promise.all([
       api.getFolders('papers', parentId),
-      parentId ? api.getDocuments('paper', parentId) : Promise.resolve([])
+      api.getDocuments('paper', parentId)
     ]);
     const hasSubFolders = subFolders.length > 0;
     const hasDocs = docs.length > 0;
@@ -12760,6 +12760,19 @@ function initContributionEventHandlers() {
         container.appendChild(canvas);
         pageObserver.observe(canvas);
         pageVisibilityObserver.observe(canvas);
+      }
+
+      // Eagerly render first page immediately so content shows up with zero delay
+      const firstCanvas = container.querySelector('canvas[data-page-num="1"]');
+      if (firstCanvas && !pageRenderingCache.has(1)) {
+        pageRenderingCache.add(1);
+        const ctx = firstCanvas.getContext('2d');
+        const renderTask = firstPage.render({ canvasContext: ctx, viewport: viewport });
+        if (renderTask && renderTask.promise) {
+          renderTask.promise.then(function () {
+            drawStudyMyteViewerWatermark(ctx, firstCanvas.width, firstCanvas.height);
+          }).catch(function () {});
+        }
       }
     }).catch(function (firstPageErr) {
       console.warn('Could not retrieve first page from PDF:', firstPageErr);

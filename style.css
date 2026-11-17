@@ -4521,7 +4521,13 @@ body[data-theme="dark"] {
 .sh-reveal.in-view,
 .sh-reveal-left.in-view,
 .sh-reveal-right.in-view,
-.sh-reveal-scale.in-view {
+.sh-reveal-scale.in-view,
+#view-home .hero-content,
+#view-home .hero-actions,
+#view-home .sh-reveal-right,
+#view-home .sh-reveal-left,
+#view-home .sh-reveal,
+#view-home .sh-reveal-scale {
   opacity: 1 !important;
   transform: translate(0, 0) scale(1) translateZ(0) !important;
 }
