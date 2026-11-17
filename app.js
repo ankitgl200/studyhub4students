@@ -12779,25 +12779,19 @@ function initContributionEventHandlers() {
     const safeName = (fileName || currentViewerDocName || 'document.pdf').replace(/"/g, '&quot;');
 
     container.innerHTML = `
-      <div style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 16px; padding: 36px 24px; max-width: 460px; width: 90%; text-align: center; margin: 40px auto; color: #fff; box-shadow: 0 12px 32px rgba(0,0,0,0.4);">
-        <div style="width: 54px; height: 54px; margin: 0 auto 16px; border-radius: 50%; background: rgba(59, 130, 246, 0.15); display: flex; align-items: center; justify-content: center; color: #60a5fa;">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-        </div>
-        <h4 style="font-size: 17px; font-weight: 700; margin: 0 0 8px; color: #ffffff;">Open Educational Document</h4>
-        <p style="font-size: 13px; color: #94a3b8; line-height: 1.5; margin: 0 0 22px;">
-          This resource is formatted for native reading. Open it directly in your browser's PDF viewer or download to view offline.
-        </p>
-        <div style="display: flex; flex-direction: column; gap: 10px;">
-          <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #2563eb; color: #fff; padding: 11px 18px; border-radius: 8px; font-weight: 600; font-size: 13px; text-decoration: none; transition: background 0.2s;">
-            <span>Open in Native Viewer</span>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 0 10px;">
+        <iframe src="${safeUrl}#toolbar=1" style="width: 100%; height: 80vh; border: none; border-radius: 8px; background: #ffffff; box-shadow: 0 8px 24px rgba(0,0,0,0.5);" title="${safeName}"></iframe>
+        <div style="display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 4px; padding-bottom: 12px;">
+          <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 6px; background: #2563eb; color: #fff; padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">
+            <span>Open in Full Tab</span>
           </a>
-          <a href="${safeUrl}" download="${safeName}" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: rgba(255,255,255,0.08); color: #cbd5e1; padding: 10px 18px; border-radius: 8px; font-weight: 500; font-size: 13px; text-decoration: none; border: 1px solid rgba(255,255,255,0.12);">
-            <span>Download Document</span>
+          <a href="${safeUrl}" download="${safeName}" style="display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.1); color: #e2e8f0; padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 500; text-decoration: none; border: 1px solid rgba(255,255,255,0.15);">
+            <span>Download PDF</span>
           </a>
         </div>
       </div>
     `;
+    if (typeof refreshIcons === 'function') refreshIcons();
   }
 
   function loadPdfIntoViewer(url, fileName) {
