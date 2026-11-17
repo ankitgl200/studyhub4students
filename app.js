@@ -1944,7 +1944,7 @@ async function renderNotesView() {
   try {
     const [subFolders, docs] = await Promise.all([
       api.getFolders('notes', parentId),
-      api.getDocuments('notes', parentId)
+      parentId ? api.getDocuments('notes', parentId) : Promise.resolve([])
     ]);
 
     const hasSubFolders = subFolders.length > 0;
@@ -2155,7 +2155,7 @@ async function renderPapersView() {
   try {
     const [subFolders, docs] = await Promise.all([
       api.getFolders('papers', parentId),
-      api.getDocuments('paper', parentId)
+      parentId ? api.getDocuments('paper', parentId) : Promise.resolve([])
     ]);
     const hasSubFolders = subFolders.length > 0;
     const hasDocs = docs.length > 0;

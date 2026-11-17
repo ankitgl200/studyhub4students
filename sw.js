@@ -1,4 +1,4 @@
-const CACHE_NAME = 'studymyte-pwa-v29';
+const CACHE_NAME = 'studymyte-pwa-v30';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
