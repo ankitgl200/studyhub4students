@@ -619,6 +619,7 @@ let editingIndex = null; // The index of the scanned page currently being edited
 let editorRotation = 0; // Rotate state (0, 90, 180, 270)
 let editorFilter = 'original'; // Current filter name ('original', 'bw', 'gray')
 let editorImg = new Image(); // The original image object loaded into editor memory
+let isDonationPopupEnabled = true; // Site settings toggle: when false, document clicks bypass donation popup
 let notesFolderStack = []; // Multi-level folder stack for Notes: [yearFolder, branchFolder, subjectFolder, ...]
 let papersFolderStack = []; // Multi-level folder stack for Papers: [yearFolder, branchFolder, subjectFolder, ...]
 let labManualsFolderStack = []; // Multi-level folder stack for Lab Manuals
@@ -13047,6 +13048,12 @@ function initContributionEventHandlers() {
 
 
   function interceptWithDonationPopup(callback) {
+    // If donation popup is disabled from Site Settings, immediately proceed without prompt
+    if (!isDonationPopupEnabled) {
+      if (typeof callback === 'function') callback();
+      return;
+    }
+
     if (skipDonationUntilReload) {
       if (typeof callback === 'function') callback();
       return;
@@ -15149,6 +15156,11 @@ async function loadPublicSiteMeta() {
   try {
     const res = await api.getSetting('site_meta');
     if (res && res.value) {
+      if (typeof res.value.donationPopupEnabled === 'boolean') {
+        isDonationPopupEnabled = res.value.donationPopupEnabled;
+      } else {
+        isDonationPopupEnabled = true;
+      }
       const versionEl = document.getElementById('footer-site-version');
       const updatedEl = document.getElementById('footer-last-updated');
       if (versionEl && res.value.version) {
@@ -15166,8 +15178,10 @@ async function loadPublicSiteMeta() {
 async function loadAdminSiteSettings() {
   const versionInput = document.getElementById('admin-input-site-version');
   const updatedInput = document.getElementById('admin-input-last-updated');
+  const donationToggle = document.getElementById('admin-toggle-donation-popup');
   const previewVersion = document.getElementById('admin-preview-site-version');
   const previewUpdated = document.getElementById('admin-preview-last-updated');
+  const previewDonation = document.getElementById('admin-preview-donation-popup');
   const alertEl = document.getElementById('admin-site-settings-alert');
   const form = document.getElementById('form-admin-site-settings');
   const setTodayBtn = document.getElementById('btn-admin-set-today-date');
@@ -15177,6 +15191,15 @@ async function loadAdminSiteSettings() {
   const syncPreview = () => {
     if (previewVersion) previewVersion.textContent = versionInput.value.trim() || 'v1.3.28';
     if (previewUpdated) previewUpdated.textContent = updatedInput.value.trim() || '16 Nov 2026';
+    if (previewDonation && donationToggle) {
+      if (donationToggle.checked) {
+        previewDonation.textContent = 'Enabled (ON)';
+        previewDonation.style.color = '#10b981';
+      } else {
+        previewDonation.textContent = 'Disabled (OFF)';
+        previewDonation.style.color = '#ef4444';
+      }
+    }
   };
 
   if (!_adminSiteSettingsBound) {
@@ -15184,6 +15207,9 @@ async function loadAdminSiteSettings() {
 
     versionInput.addEventListener('input', syncPreview);
     updatedInput.addEventListener('input', syncPreview);
+    if (donationToggle) {
+      donationToggle.addEventListener('change', syncPreview);
+    }
 
     if (setTodayBtn) {
       setTodayBtn.addEventListener('click', () => {
@@ -15207,9 +15233,11 @@ async function loadAdminSiteSettings() {
         try {
           const version = versionInput.value.trim();
           const lastUpdated = updatedInput.value.trim();
+          const donationPopupEnabled = donationToggle ? donationToggle.checked : true;
           if (!version || !lastUpdated) throw new Error('Please fill in both Version and Last Update Date.');
 
-          await api.setSetting('site_meta', { version, lastUpdated });
+          await api.setSetting('site_meta', { version, lastUpdated, donationPopupEnabled });
+          isDonationPopupEnabled = donationPopupEnabled;
 
           // Update footer elements live immediately
           const footerVer = document.getElementById('footer-site-version');
@@ -15222,7 +15250,7 @@ async function loadAdminSiteSettings() {
             alertEl.style.background = 'rgba(16, 185, 129, 0.12)';
             alertEl.style.color = '#065f46';
             alertEl.style.border = '1px solid rgba(16, 185, 129, 0.3)';
-            alertEl.innerHTML = '✅ Site settings updated successfully! Public footer is updated.';
+            alertEl.innerHTML = `✅ Site settings updated successfully! Donation popup on file click is now <strong>${donationPopupEnabled ? 'ENABLED (ON)' : 'DISABLED (OFF)'}</strong>.`;
             setTimeout(() => { alertEl.style.display = 'none'; }, 4000);
           }
         } catch (err) {
@@ -15247,13 +15275,18 @@ async function loadAdminSiteSettings() {
   // Fetch current settings from backend
   try {
     const res = await api.getSetting('site_meta');
-    const val = (res && res.value) ? res.value : { version: 'v1.3.28', lastUpdated: '16 Nov 2026' };
+    const val = (res && res.value) ? res.value : { version: 'v1.3.28', lastUpdated: '16 Nov 2026', donationPopupEnabled: true };
     versionInput.value = val.version || 'v1.3.28';
     updatedInput.value = val.lastUpdated || '16 Nov 2026';
+    if (donationToggle) {
+      donationToggle.checked = (val.donationPopupEnabled !== false);
+    }
+    isDonationPopupEnabled = (val.donationPopupEnabled !== false);
     syncPreview();
   } catch (err) {
     versionInput.value = 'v1.3.28';
     updatedInput.value = '16 Nov 2026';
+    if (donationToggle) donationToggle.checked = true;
     syncPreview();
   }
 }
