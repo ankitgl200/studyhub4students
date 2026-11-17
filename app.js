@@ -611,6 +611,10 @@ let currentUser = null;
 let uploadSourceMode = 'file'; // 'file' | 'link' | 'scan'
 let scanImages = []; // Array of compressed scanned images { dataUrl, width, height }
 let cameraStream = null; // Holds the MediaStream object for camera capture
+let contributeSourceMode = 'file'; // 'file' | 'link' | 'scan'
+let contributeScanImages = []; // Array of compressed scanned images for contribute modal
+let contributeCameraStream = null; // Holds MediaStream object for contribute camera capture
+let currentScanContext = 'upload'; // 'upload' | 'contribute'
 let editingIndex = null; // The index of the scanned page currently being edited
 let editorRotation = 0; // Rotate state (0, 90, 180, 270)
 let editorFilter = 'original'; // Current filter name ('original', 'bw', 'gray')
@@ -5382,16 +5386,18 @@ function compressImage(file) {
   });
 }
 
-function renderScanPreviewGallery() {
-  const gallery = document.getElementById('scan-preview-gallery');
-  const container = document.getElementById('scan-preview-container');
-  const btnClear = document.getElementById('btn-scan-clear');
+function renderScanPreviewGallery(context = currentScanContext) {
+  const isContribute = context === 'contribute';
+  const gallery = document.getElementById(isContribute ? 'contribute-scan-preview-gallery' : 'scan-preview-gallery');
+  const container = document.getElementById(isContribute ? 'contribute-scan-preview-container' : 'scan-preview-container');
+  const btnClear = document.getElementById(isContribute ? 'btn-contribute-scan-clear' : 'btn-scan-clear');
+  const targetImages = isContribute ? contributeScanImages : scanImages;
 
   if (!gallery) return;
 
   gallery.innerHTML = '';
 
-  if (scanImages.length === 0) {
+  if (targetImages.length === 0) {
     if (container) container.style.display = 'none';
     if (btnClear) btnClear.style.display = 'none';
     return;
@@ -5400,7 +5406,7 @@ function renderScanPreviewGallery() {
   if (container) container.style.display = 'block';
   if (btnClear) btnClear.style.display = 'inline-block';
 
-  scanImages.forEach((img, idx) => {
+  targetImages.forEach((img, idx) => {
     const item = document.createElement('div');
     item.className = 'scan-thumbnail-item';
     item.style.cssText = 'position: relative; border-radius: var(--radius-sm); border: 1px solid var(--border-color); overflow: hidden; aspect-ratio: 3/4; display: flex; flex-direction: column; background: #000; box-shadow: var(--shadow-sm);';
@@ -5412,7 +5418,7 @@ function renderScanPreviewGallery() {
           <i data-lucide="arrow-left" style="width: 14px; height: 14px;"></i>
         </button>
         <span class="thumb-page-num" style="color: #fff; font-size: 10px; font-weight: bold;">P. ${idx + 1}</span>
-        <button type="button" class="thumb-control-btn btn-right" style="background: none; border: none; color: #fff; padding: 2px; cursor: pointer; display: flex; align-items: center; opacity: ${idx === scanImages.length - 1 ? 0.3 : 1};" ${idx === scanImages.length - 1 ? 'disabled' : ''}>
+        <button type="button" class="thumb-control-btn btn-right" style="background: none; border: none; color: #fff; padding: 2px; cursor: pointer; display: flex; align-items: center; opacity: ${idx === targetImages.length - 1 ? 0.3 : 1};" ${idx === targetImages.length - 1 ? 'disabled' : ''}>
           <i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
         </button>
       </div>
@@ -5427,32 +5433,32 @@ function renderScanPreviewGallery() {
     item.querySelector('.btn-left').addEventListener('click', (e) => {
       e.stopPropagation();
       if (idx > 0) {
-        const temp = scanImages[idx];
-        scanImages[idx] = scanImages[idx - 1];
-        scanImages[idx - 1] = temp;
-        renderScanPreviewGallery();
+        const temp = targetImages[idx];
+        targetImages[idx] = targetImages[idx - 1];
+        targetImages[idx - 1] = temp;
+        renderScanPreviewGallery(context);
       }
     });
 
     item.querySelector('.btn-right').addEventListener('click', (e) => {
       e.stopPropagation();
-      if (idx < scanImages.length - 1) {
-        const temp = scanImages[idx];
-        scanImages[idx] = scanImages[idx + 1];
-        scanImages[idx + 1] = temp;
-        renderScanPreviewGallery();
+      if (idx < targetImages.length - 1) {
+        const temp = targetImages[idx];
+        targetImages[idx] = targetImages[idx + 1];
+        targetImages[idx + 1] = temp;
+        renderScanPreviewGallery(context);
       }
     });
 
     item.querySelector('.thumb-edit-btn').addEventListener('click', (e) => {
       e.stopPropagation();
-      loadEditor(idx);
+      loadEditor(idx, context);
     });
 
     item.querySelector('.thumb-delete-btn').addEventListener('click', (e) => {
       e.stopPropagation();
-      scanImages.splice(idx, 1);
-      renderScanPreviewGallery();
+      targetImages.splice(idx, 1);
+      renderScanPreviewGallery(context);
     });
 
     gallery.appendChild(item);
@@ -5579,7 +5585,8 @@ function drawEditorCanvas(applyCrop = false) {
   }
 }
 
-function loadEditor(idx) {
+function loadEditor(idx, context = currentScanContext) {
+  currentScanContext = context;
   editingIndex = idx;
   editorRotation = 0;
   editorFilter = 'original';
@@ -5591,13 +5598,16 @@ function loadEditor(idx) {
   document.getElementById('range-crop-bottom').value = 0;
   updateSliderLabels();
 
+  const targetArr = context === 'contribute' ? contributeScanImages : scanImages;
+  if (!targetArr || !targetArr[idx]) return;
+
   // Show loading indicator or block UI
   editorImg.onload = function () {
     drawEditorCanvas();
     const modal = document.getElementById('modal-image-editor');
     if (modal) modal.style.display = 'flex';
   };
-  editorImg.src = scanImages[idx].dataUrl;
+  editorImg.src = targetArr[idx].dataUrl;
 }
 
 // Initializing event listeners for the editor
@@ -5675,13 +5685,14 @@ function initEditorEventHandlers() {
       const canvas = document.getElementById('editor-canvas');
       if (canvas && editingIndex !== null) {
         const finalDataUrl = canvas.toDataURL('image/jpeg', 0.7);
-        scanImages[editingIndex] = {
+        const targetArr = currentScanContext === 'contribute' ? contributeScanImages : scanImages;
+        targetArr[editingIndex] = {
           dataUrl: finalDataUrl,
           width: canvas.width,
           height: canvas.height
         };
         closeEditorModal();
-        renderScanPreviewGallery();
+        renderScanPreviewGallery(currentScanContext);
       }
     });
   }
@@ -5901,6 +5912,7 @@ function openUploadModal(docType, folderId = null, folderName = '') {
 
   // Reset upload source mode and UI tabs
   uploadSourceMode = 'file';
+  currentScanContext = 'upload';
   const tabFileEl = document.getElementById('tab-upload-file');
   const tabLinkEl = document.getElementById('tab-upload-link');
   const tabScanEl = document.getElementById('tab-upload-scan');
@@ -5930,7 +5942,7 @@ function openUploadModal(docType, folderId = null, folderName = '') {
   if (scanCameraInput) scanCameraInput.value = '';
   if (scanGalleryInput) scanGalleryInput.value = '';
   scanImages = [];
-  renderScanPreviewGallery();
+  renderScanPreviewGallery('upload');
 
   document.getElementById('modal-upload').style.display = 'flex';
 }
@@ -10119,6 +10131,7 @@ function initEventHandlers() {
 
     tabUploadScan.addEventListener('click', () => {
       uploadSourceMode = 'scan';
+      currentScanContext = 'upload';
       tabUploadFile.classList.remove('active');
       tabUploadLink.classList.remove('active');
       tabUploadScan.classList.add('active');
@@ -10126,6 +10139,7 @@ function initEventHandlers() {
       if (groupUploadLink) groupUploadLink.style.display = 'none';
       if (groupUploadScan) groupUploadScan.style.display = 'block';
       if (uploadErrorAlert) uploadErrorAlert.style.display = 'none';
+      renderScanPreviewGallery('upload');
     });
   }
 
@@ -12441,6 +12455,14 @@ function initContributionEventHandlers() {
   const submitBtn = document.getElementById('btn-contribute-submit');
 
   const closeContribute = () => {
+    if (contributeCameraStream) {
+      contributeCameraStream.getTracks().forEach(track => track.stop());
+      contributeCameraStream = null;
+    }
+    const contributeStreamWrapper = document.getElementById('contribute-scan-camera-stream-wrapper');
+    const contributeGalleryWrapper = document.getElementById('contribute-scan-gallery-and-actions');
+    if (contributeStreamWrapper) contributeStreamWrapper.style.display = 'none';
+    if (contributeGalleryWrapper) contributeGalleryWrapper.style.display = 'block';
     if (contributeModal) contributeModal.style.display = 'none';
   };
 
@@ -12573,11 +12595,27 @@ function initContributionEventHandlers() {
 
     // Reset tab states
     contributeSourceMode = 'file';
+    currentScanContext = 'contribute';
+    contributeScanImages = [];
+    if (contributeCameraStream) {
+      contributeCameraStream.getTracks().forEach(t => t.stop());
+      contributeCameraStream = null;
+    }
+    const tabContributeScan = document.getElementById('tab-contribute-scan');
+    const groupContributeScan = document.getElementById('group-contribute-scan');
+    const contributeStreamWrapper = document.getElementById('contribute-scan-camera-stream-wrapper');
+    const contributeGalleryWrapper = document.getElementById('contribute-scan-gallery-and-actions');
+    if (contributeStreamWrapper) contributeStreamWrapper.style.display = 'none';
+    if (contributeGalleryWrapper) contributeGalleryWrapper.style.display = 'block';
+
     if (tabFile) tabFile.classList.add('active');
     if (tabLink) tabLink.classList.remove('active');
+    if (tabContributeScan) tabContributeScan.classList.remove('active');
     if (groupFile) groupFile.style.display = 'block';
     if (groupLink) groupLink.style.display = 'none';
+    if (groupContributeScan) groupContributeScan.style.display = 'none';
     if (fileLabel) fileLabel.textContent = 'Click to browse files';
+    renderScanPreviewGallery('contribute');
 
     // Auto-detect current active view and folder context if not explicitly provided
     let autoCat = targetCategory;
@@ -13097,23 +13135,189 @@ function initContributionEventHandlers() {
     });
   }
 
-  let contributeSourceMode = 'file';
+  const tabScan = document.getElementById('tab-contribute-scan');
+  const groupScan = document.getElementById('group-contribute-scan');
+  const btnScanCamera = document.getElementById('btn-contribute-scan-camera');
+  const btnScanGallery = document.getElementById('btn-contribute-scan-gallery');
+  const btnScanClear = document.getElementById('btn-contribute-scan-clear');
+  const btnScanCapture = document.getElementById('btn-contribute-scan-capture');
+  const btnScanStop = document.getElementById('btn-contribute-scan-stop');
+  const scanVideo = document.getElementById('contribute-scan-video');
+  const streamWrapper = document.getElementById('contribute-scan-camera-stream-wrapper');
+  const galleryWrapper = document.getElementById('contribute-scan-gallery-and-actions');
+  const scanGalleryInput = document.getElementById('contribute-scan-gallery-input');
+
   if (tabFile && tabLink) {
     tabFile.addEventListener('click', () => {
       contributeSourceMode = 'file';
       tabFile.classList.add('active');
       tabLink.classList.remove('active');
+      if (tabScan) tabScan.classList.remove('active');
       if (groupFile) groupFile.style.display = 'block';
       if (groupLink) groupLink.style.display = 'none';
+      if (groupScan) groupScan.style.display = 'none';
       if (errorAlert) errorAlert.style.display = 'none';
+
+      if (contributeCameraStream) {
+        contributeCameraStream.getTracks().forEach(track => track.stop());
+        contributeCameraStream = null;
+      }
+      if (streamWrapper) streamWrapper.style.display = 'none';
+      if (galleryWrapper) galleryWrapper.style.display = 'block';
     });
+
     tabLink.addEventListener('click', () => {
       contributeSourceMode = 'link';
       tabFile.classList.remove('active');
       tabLink.classList.add('active');
+      if (tabScan) tabScan.classList.remove('active');
       if (groupFile) groupFile.style.display = 'none';
       if (groupLink) groupLink.style.display = 'block';
+      if (groupScan) groupScan.style.display = 'none';
       if (errorAlert) errorAlert.style.display = 'none';
+
+      if (contributeCameraStream) {
+        contributeCameraStream.getTracks().forEach(track => track.stop());
+        contributeCameraStream = null;
+      }
+      if (streamWrapper) streamWrapper.style.display = 'none';
+      if (galleryWrapper) galleryWrapper.style.display = 'block';
+    });
+
+    if (tabScan) {
+      tabScan.addEventListener('click', () => {
+        contributeSourceMode = 'scan';
+        currentScanContext = 'contribute';
+        tabFile.classList.remove('active');
+        tabLink.classList.remove('active');
+        tabScan.classList.add('active');
+        if (groupFile) groupFile.style.display = 'none';
+        if (groupLink) groupLink.style.display = 'none';
+        if (groupScan) groupScan.style.display = 'block';
+        if (errorAlert) errorAlert.style.display = 'none';
+        renderScanPreviewGallery('contribute');
+      });
+    }
+  }
+
+  const handleContributeScanFiles = async (files, triggerButton) => {
+    if (!files || !files.length) return;
+    const originalText = triggerButton.innerHTML;
+    triggerButton.disabled = true;
+    triggerButton.innerHTML = 'Compressing...';
+
+    try {
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        const compressed = await compressImage(file);
+        contributeScanImages.push(compressed);
+      }
+      currentScanContext = 'contribute';
+      renderScanPreviewGallery('contribute');
+    } catch (err) {
+      console.error(err);
+      alert('Error processing one or more photos.');
+    } finally {
+      triggerButton.disabled = false;
+      triggerButton.innerHTML = originalText;
+    }
+  };
+
+  if (btnScanCamera && streamWrapper && galleryWrapper) {
+    btnScanCamera.addEventListener('click', async () => {
+      currentScanContext = 'contribute';
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        const fallbackInput = document.createElement('input');
+        fallbackInput.type = 'file';
+        fallbackInput.accept = 'image/*';
+        fallbackInput.capture = 'environment';
+        fallbackInput.addEventListener('change', async (e) => {
+          await handleContributeScanFiles(Array.from(e.target.files), btnScanCamera);
+        });
+        fallbackInput.click();
+        return;
+      }
+
+      try {
+        contributeCameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } }
+        });
+        if (scanVideo) {
+          scanVideo.srcObject = contributeCameraStream;
+          scanVideo.play();
+        }
+        streamWrapper.style.display = 'block';
+        galleryWrapper.style.display = 'none';
+      } catch (err) {
+        console.error('Camera access error:', err);
+        const fallbackInput = document.createElement('input');
+        fallbackInput.type = 'file';
+        fallbackInput.accept = 'image/*';
+        fallbackInput.capture = 'environment';
+        fallbackInput.addEventListener('change', async (e) => {
+          await handleContributeScanFiles(Array.from(e.target.files), btnScanCamera);
+        });
+        fallbackInput.click();
+      }
+    });
+  }
+
+  if (btnScanStop && streamWrapper && galleryWrapper) {
+    btnScanStop.addEventListener('click', () => {
+      if (contributeCameraStream) {
+        contributeCameraStream.getTracks().forEach(track => track.stop());
+        contributeCameraStream = null;
+      }
+      streamWrapper.style.display = 'none';
+      galleryWrapper.style.display = 'block';
+    });
+  }
+
+  if (btnScanCapture && scanVideo) {
+    btnScanCapture.addEventListener('click', () => {
+      if (!contributeCameraStream) return;
+
+      const canvas = document.createElement('canvas');
+      const width = scanVideo.videoWidth || 1280;
+      const height = scanVideo.videoHeight || 960;
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(scanVideo, 0, 0, width, height);
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      contributeScanImages.push({
+        dataUrl,
+        width,
+        height
+      });
+
+      scanVideo.style.opacity = '0.3';
+      setTimeout(() => {
+        scanVideo.style.opacity = '1';
+      }, 100);
+
+      currentScanContext = 'contribute';
+      renderScanPreviewGallery('contribute');
+    });
+  }
+
+  if (btnScanGallery && scanGalleryInput) {
+    btnScanGallery.addEventListener('click', () => scanGalleryInput.click());
+  }
+
+  if (scanGalleryInput) {
+    scanGalleryInput.addEventListener('change', async (e) => {
+      await handleContributeScanFiles(Array.from(e.target.files), btnScanGallery);
+      scanGalleryInput.value = '';
+    });
+  }
+
+  if (btnScanClear) {
+    btnScanClear.addEventListener('click', () => {
+      contributeScanImages = [];
+      renderScanPreviewGallery('contribute');
     });
   }
 
@@ -13207,6 +13411,47 @@ function initContributionEventHandlers() {
           formData.append('year', year);
 
           await api.contributeDocument(formData);
+        } else if (contributeSourceMode === 'scan') {
+          if (contributeScanImages.length === 0) {
+            throw new Error('Please add or capture at least one photo before submitting');
+          }
+
+          submitBtn.textContent = 'Compiling PDF...';
+          await ensureJsPDFLoaded();
+          const { jsPDF } = window.jspdf;
+
+          const first = contributeScanImages[0];
+          const doc = new jsPDF({
+            orientation: first.width > first.height ? 'landscape' : 'portrait',
+            unit: 'px',
+            format: [first.width, first.height]
+          });
+          doc.addImage(first.dataUrl, 'JPEG', 0, 0, first.width, first.height);
+
+          for (let i = 1; i < contributeScanImages.length; i++) {
+            const img = contributeScanImages[i];
+            doc.addPage([img.width, img.height], img.width > img.height ? 'landscape' : 'portrait');
+            doc.addImage(img.dataUrl, 'JPEG', 0, 0, img.width, img.height);
+          }
+
+          const pdfBlob = doc.output('blob');
+          const MAX_FILE_SIZE = 10485760;
+          if (pdfBlob.size > MAX_FILE_SIZE) {
+            throw new Error(`Generated PDF is too large (${(pdfBlob.size / 1024 / 1024).toFixed(2)} MB). Maximum allowed is 10 MB. Please clear and scan fewer/smaller images.`);
+          }
+
+          submitBtn.textContent = 'Uploading PDF...';
+          const safeFileName = title.toLowerCase().replace(/[^a-z0-9]/g, '_') + '.pdf';
+
+          const formData = new FormData();
+          formData.append('pdf', pdfBlob, safeFileName);
+          formData.append('title', title);
+          formData.append('type', docType);
+          formData.append('folderId', folderId);
+          formData.append('subject', subject);
+          formData.append('year', year);
+
+          await api.contributeDocument(formData);
         } else {
           const link = linkInput.value.trim();
           if (!link) {
@@ -13234,6 +13479,8 @@ function initContributionEventHandlers() {
         }
 
         contributeForm.reset();
+        contributeScanImages = [];
+        renderScanPreviewGallery('contribute');
         if (fileLabel) fileLabel.textContent = 'Click to browse files';
         if (subjectSelect) {
           subjectSelect.disabled = true;

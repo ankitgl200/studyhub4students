@@ -4289,11 +4289,13 @@
         <div class="form-group">
           <label class="form-label">Document Source</label>
           <div class="calculator-tabs"
-            style="margin-bottom: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            style="margin-bottom: 12px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
             <button type="button" class="calc-tab active" id="tab-contribute-file"
               style="padding: 8px; font-size: 13px;">Upload PDF</button>
             <button type="button" class="calc-tab" id="tab-contribute-link" style="padding: 8px; font-size: 13px;">Paste
               Link</button>
+            <button type="button" class="calc-tab" id="tab-contribute-scan" style="padding: 8px; font-size: 13px;">Scan
+              Photos</button>
           </div>
         </div>
 
@@ -4321,6 +4323,65 @@
           <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
             Make sure the link sharing settings are set to "Anyone with the link can view".
           </p>
+        </div>
+
+        <!-- Scan/Click Photos Section for Contribute -->
+        <div class="form-group" id="group-contribute-scan" style="display: none;">
+          <label class="form-label">Scan / Capture Photos</label>
+
+          <!-- Live Camera Feed Stream Wrapper -->
+          <div id="contribute-scan-camera-stream-wrapper"
+            style="display: none; background: #0f172a; border-radius: var(--radius-sm); padding: 12px; margin-bottom: 12px; border: 1px solid var(--border-color);">
+            <video id="contribute-scan-video" autoplay playsinline
+              style="width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: var(--radius-sm); background: #000; border: 2px solid var(--primary);"></video>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
+              <button type="button" id="btn-contribute-scan-capture" class="btn btn-primary"
+                style="padding: 10px; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <i data-lucide="aperture" style="width: 18px; height: 18px;"></i>
+                Capture Photo
+              </button>
+              <button type="button" id="btn-contribute-scan-stop" class="btn btn-secondary"
+                style="padding: 10px; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 6px; border-color: var(--danger); color: var(--danger);">
+                Stop Camera
+              </button>
+            </div>
+          </div>
+
+          <!-- Main Gallery and Upload controls -->
+          <div id="contribute-scan-gallery-and-actions">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+              <button type="button" id="btn-contribute-scan-camera" class="btn btn-secondary"
+                style="padding: 10px; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <i data-lucide="camera" style="width: 18px; height: 18px;"></i>
+                Take Photo
+              </button>
+              <button type="button" id="btn-contribute-scan-gallery" class="btn btn-secondary"
+                style="padding: 10px; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <i data-lucide="image" style="width: 18px; height: 18px;"></i>
+                Add from Gallery
+              </button>
+            </div>
+
+            <button type="button" id="btn-contribute-scan-clear" class="btn btn-secondary"
+              style="width: 100%; margin-bottom: 12px; border-color: var(--danger); color: var(--danger); font-size: 14px; display: none;">
+              Clear All
+            </button>
+
+            <!-- Hidden input for triggering gallery -->
+            <input type="file" id="contribute-scan-gallery-input" accept="image/*" multiple style="display: none;" />
+
+            <div id="contribute-scan-preview-container" style="display: none;">
+              <p class="form-label" style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">Captured
+                Pages (Reorder or Delete):</p>
+              <div id="contribute-scan-preview-gallery"
+                style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; max-height: 250px; overflow-y: auto; padding: 8px; border: 1px dashed var(--border-color); border-radius: var(--radius-sm); background: #f8fafc;">
+                <!-- Filled dynamically -->
+              </div>
+              <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+                Use arrow buttons on each photo to shift pages left/right, and the 'x' button to delete.
+              </p>
+            </div>
+          </div>
         </div>
 
         <div class="form-actions">
@@ -4881,7 +4942,7 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
 
-  <script src="/app.js?v=1.3.37"></script>
+  <script src="/app.js?v=1.3.38"></script>
 
 
 
